@@ -1,19 +1,28 @@
 /**
- * Members of this app, and the bookings they share with each other.
+ * Members of this app, and what they share with each other.
  *
  * BigBox has no concept of following another member, so the desktop app's
  * "friends" feature works by storing a friend's *login* and signing in as
  * them. This replaces that: everyone signs into this app themselves, their own
- * bookings are snapshotted here, and the shared view is assembled from those
- * snapshots. Nobody ever holds anybody else's credentials.
+ * bookings and gym visits are snapshotted here, and the shared view is
+ * assembled from those snapshots. Nobody ever holds anybody else's credentials.
  */
 
-import { and, desc, eq, gte, inArray, lt, ne, notInArray, sql } from 'drizzle-orm'
-import { bookings, users, type User } from '../database/schema'
+import { parseNaive, today } from '#shared/naive'
+import type { Visit } from '#shared/visits'
+import { toVisits } from '#shared/visits'
 import { decrypt, encrypt } from './crypto'
-import { useDb } from './db'
-import { today } from '#shared/naive'
 import { Client, classStart, isActive, isQueued } from './resamania'
+import { type Member, readMember, readMembers, writeMember } from './store'
+
+/**
+ * How much visit history to keep per member.
+ *
+ * A week is what makes "usually here on Tuesday evenings" answerable while
+ * staying a rolling window rather than a permanent record of somebody's
+ * comings and goings. Anything older is dropped on every sync.
+ */
+export const ENTRY_RETENTION_DAYS = 7
 
 // --- Live API clients ---
 
@@ -25,30 +34,27 @@ interface CachedClient {
 /**
  * Signed-in Resamania clients, keyed by contact IRI.
  *
- * A client is worth reusing: logging in costs three round trips (token,
- * contact_user, contact) and the club's API is not ours to hammer. Clients
- * refresh their own tokens, so one stays usable well past the hour an access
- * token lasts, but they are dropped after a while anyway so a member who
- * changes their BigBox password is not served indefinitely from a stale
- * session.
+ * A client is worth reusing: logging in costs three round trips and the club's
+ * API is not ours to hammer. Clients refresh their own tokens, so one stays
+ * usable well past the hour an access token lasts, but they are dropped after
+ * a while anyway so a member who changes their BigBox password is not served
+ * indefinitely from a stale session.
  */
 const CLIENT_TTL_MS = 30 * 60_000
-const clients = new Map<string, CachedClient>()
 
 declare global {
-   
   var __bigbudsClients: Map<string, CachedClient> | undefined
 }
 
-const clientCache = (globalThis.__bigbudsClients ??= clients)
+const clientCache = (globalThis.__bigbudsClients ??= new Map<string, CachedClient>())
 
 /** A signed-in client for this member, reusing a live session where possible. */
-export async function clientFor(user: Pick<User, 'contactId' | 'email' | 'encryptedPassword'>) {
-  const cached = clientCache.get(user.contactId)
+export async function clientFor(member: Pick<Member, 'contactId' | 'email' | 'encryptedPassword'>) {
+  const cached = clientCache.get(member.contactId)
   if (cached && Date.now() - cached.at < CLIENT_TTL_MS) return cached.client
 
-  const client = await Client.login(user.email, decrypt(user.encryptedPassword))
-  clientCache.set(user.contactId, { client, at: Date.now() })
+  const client = await Client.login(member.email, decrypt(member.encryptedPassword))
+  clientCache.set(member.contactId, { client, at: Date.now() })
   return client
 }
 
@@ -62,16 +68,23 @@ export function forgetClient(contactId: string) {
  * Signs a member in against BigBox and records them here.
  *
  * There is no separate sign-up: a BigBox membership *is* the account, so a
- * first login creates the row and every later one refreshes it. The password
- * is re-encrypted each time so that changing it at the club and signing in
- * here is all it takes to fix a broken background sync.
+ * first login creates the record and every later one refreshes it. The
+ * password is re-encrypted each time, so changing it at the club and signing
+ * in here is all it takes to fix a broken background sync.
  */
-export async function signIn(email: string, password: string): Promise<User> {
+export async function signIn(email: string, password: string): Promise<Member> {
   const client = await Client.login(email.trim(), password)
   const profile = client.profile
+  const now = new Date().toISOString()
 
-  const db = useDb()
-  const values = {
+  const member = await writeMember(profile.contactId, current => ({
+    // Settings a returning member has already chosen must survive a re-login.
+    visible: current?.visible ?? true,
+    shareEntries: current?.shareEntries ?? true,
+    bookings: current?.bookings ?? [],
+    entries: current?.entries ?? [],
+    createdAt: current?.createdAt ?? now,
+
     contactId: profile.contactId,
     clubId: profile.clubId,
     email: profile.email || email.trim(),
@@ -80,99 +93,117 @@ export async function signIn(email: string, password: string): Promise<User> {
     membershipNumber: profile.number,
     encryptedPassword: encrypt(password),
     syncError: null,
-    updatedAt: new Date(),
-  }
-
-  const [user] = await db
-    .insert(users)
-    .values(values)
-    .onConflictDoUpdate({ target: users.contactId, set: values })
-    .returning()
-
-  if (!user) throw new Error('Failed to record member')
+    lastSyncedAt: current?.lastSyncedAt ?? null,
+    updatedAt: now,
+  }))
 
   clientCache.set(profile.contactId, { client, at: Date.now() })
-  return user
+  return member
 }
 
-export function findUser(id: number) {
-  return useDb().query.users.findFirst({ where: eq(users.id, id) })
-}
+export const findMember = readMember
 
-// --- Booking snapshots ---
+// --- Snapshots ---
 
 /**
- * Refreshes this member's stored bookings from BigBox.
+ * Refreshes this member's bookings and gym visits from BigBox.
  *
- * The snapshot is deliberately *replaced* rather than merged: a booking the
- * member cancelled in the club's own app has no row to update here, it simply
- * stops being returned, and merging would leave it showing to everyone else
- * forever. Anything not in the fresh list, plus anything already in the past,
- * is deleted.
+ * Both snapshots are *replaced* rather than merged. A booking the member
+ * cancelled in the club's own app has no row to update here, it simply stops
+ * being returned, and merging would leave it showing to everyone else forever.
+ *
+ * Visits are the exception in one direction: the API returns only a short
+ * window of recent scans, so those are *accumulated* — anything already stored
+ * and still inside the retention window is kept, and new scans are merged in.
+ * That is what makes a week of history possible at all.
  */
-export async function syncBookings(user: User): Promise<number> {
-  const client = await clientFor(user)
+export async function syncMember(member: Member): Promise<{ bookings: number, entries: number }> {
+  const client = await clientFor(member)
   const from = today()
 
-  const attendees = await client.bookingsFrom(from)
+  const [attendees, entries] = await Promise.all([
+    client.bookingsFrom(from),
+    // A member who has turned visit sharing off should not have their
+    // movements collected in the first place, not merely hidden at render.
+    member.shareEntries ? client.entries(member.contactId) : Promise.resolve([]),
+  ])
 
-  const rows = attendees
-    .filter(attendee => isActive(attendee))
-    .flatMap(attendee => {
-      const event = attendee.classEvent
-      const start = event ? classStart(event) : null
-      if (!event || !start) return []
-
-      return [{
-        userId: user.id,
-        classEventId: event['@id'],
-        state: isQueued(attendee) ? 'queued' : 'booked',
-        startedAt: start,
-        syncedAt: new Date(),
-      }]
-    })
-
-  const db = useDb()
-
-  await db.transaction(async tx => {
-    if (rows.length) {
-      await tx
-        .insert(bookings)
-        .values(rows)
-        .onConflictDoUpdate({
-          target: [bookings.userId, bookings.classEventId],
-          set: {
-            state: sql`excluded.state`,
-            startedAt: sql`excluded.started_at`,
-            syncedAt: new Date(),
-          },
-        })
-    }
-
-    // Drop this member's rows that BigBox no longer returns, which is what a
-    // cancellation looks like from here.
-    const stale = rows.length
-      ? and(
-          eq(bookings.userId, user.id),
-          notInArray(bookings.classEventId, rows.map(row => row.classEventId)),
-        )
-      : eq(bookings.userId, user.id)
-
-    await tx.delete(bookings).where(stale)
-
-    // Then prune everyone's finished classes. Global rather than per-member on
-    // purpose: this is the only thing that runs often enough to keep the table
-    // proportional to what is upcoming instead of growing forever, and a
-    // member who stops using the app would otherwise leave rows behind.
-    await tx.delete(bookings).where(lt(bookings.startedAt, `${from}T00:00:00`))
+  const scans = entries.flatMap(entry => {
+    const at = parseNaive(entry.createdAt)
+    // A scan with no usable timestamp cannot be placed in a visit, and a visit
+    // is the only thing these are ever used for.
+    return at ? [{ id: entry['@id'], at, crossingPoint: entry.crossingPoint ?? '' }] : []
   })
 
-  await db
-    .update(users)
-    .set({ lastSyncedAt: new Date(), syncError: null })
-    .where(eq(users.id, user.id))
+  const bookings = attendees.filter(isActive).flatMap(attendee => {
+    const event = attendee.classEvent
+    const start = event ? classStart(event) : null
+    if (!event || !start) return []
 
-  return rows.length
+    return [{
+      classEventId: event['@id'],
+      state: isQueued(attendee) ? 'queued' : 'booked',
+      startedAt: start,
+    }]
+  })
+
+  const cutoff = cutoffDate()
+
+  const saved = await writeMember(member.contactId, current => {
+    const base = current ?? member
+
+    // Merge by entry IRI: the API's window overlaps what we already hold, and
+    // re-adding the same scan every fifteen minutes would multiply it.
+    const merged = new Map((base.entries ?? []).map(entry => [entry.id, entry]))
+    if (base.shareEntries) {
+      for (const scan of scans) merged.set(scan.id, scan)
+    }
+
+    return {
+      ...base,
+      bookings,
+      entries: base.shareEntries
+        ? [...merged.values()].filter(entry => entry.at >= cutoff).sort((a, b) => a.at.localeCompare(b.at))
+        : [],
+      syncError: null,
+      lastSyncedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+  })
+
+  return { bookings: saved.bookings.length, entries: saved.entries.length }
+}
+
+/** The oldest visit timestamp worth keeping, as a naive wall-clock string. */
+function cutoffDate(): string {
+  const [year, month, day] = today().split('-').map(Number) as [number, number, number]
+  const at = new Date(Date.UTC(year, month - 1, day))
+  at.setUTCDate(at.getUTCDate() - ENTRY_RETENTION_DAYS)
+  return `${at.toISOString().slice(0, 10)}T00:00:00`
+}
+
+/** Records that a member could not be synced, for the UI to surface. */
+export async function recordSyncFailure(contactId: string, message: string) {
+  forgetClient(contactId)
+  await writeMember(contactId, current => ({
+    ...current!,
+    syncError: message,
+    updatedAt: new Date().toISOString(),
+  }))
+}
+
+/** Updates a member's sharing settings. */
+export function updateSettings(
+  contactId: string,
+  settings: Partial<Pick<Member, 'visible' | 'shareEntries'>>,
+): Promise<Member> {
+  return writeMember(contactId, current => {
+    const next = { ...current!, ...settings, updatedAt: new Date().toISOString() }
+    // Turning visit sharing off discards what was already collected rather
+    // than merely hiding it. "Off" should not mean "still on file".
+    if (settings.shareEntries === false) next.entries = []
+    return next
+  })
 }
 
 // --- The shared view ---
@@ -180,15 +211,18 @@ export async function syncBookings(user: User): Promise<number> {
 export interface AlsoGoing {
   contactId: string
   name: string
-  /** `booked` or `queued` — a waiting-list place is not a promise to be there. */
+  /** `booked` or `queued`. */
   state: string
 }
+
+export const memberName = (member: Member) =>
+  `${member.givenName} ${member.familyName}`.trim() || 'A member'
 
 /**
  * Who else is going, for a set of classes.
  *
- * Returns a map from class IRI to the members going, excluding the viewer
- * themselves (they already know) and anyone who has turned visibility off.
+ * Excludes the viewer — they already know — and anyone who has turned
+ * visibility off.
  */
 export async function alsoGoing(
   classEventIds: string[],
@@ -196,90 +230,66 @@ export async function alsoGoing(
 ): Promise<Record<string, AlsoGoing[]>> {
   if (!classEventIds.length) return {}
 
-  const rows = await useDb()
-    .select({
-      classEventId: bookings.classEventId,
-      state: bookings.state,
-      contactId: users.contactId,
-      givenName: users.givenName,
-      familyName: users.familyName,
-    })
-    .from(bookings)
-    .innerJoin(users, eq(users.id, bookings.userId))
-    .where(
-      and(
-        inArray(bookings.classEventId, classEventIds),
-        eq(users.visible, true),
-        ne(users.contactId, viewerContactId),
-      ),
-    )
-
+  const wanted = new Set(classEventIds)
   const going: Record<string, AlsoGoing[]> = {}
-  for (const row of rows) {
-    const name = `${row.givenName} ${row.familyName}`.trim() || 'A member'
-    ;(going[row.classEventId] ??= []).push({
-      contactId: row.contactId,
-      name,
-      state: row.state,
-    })
+
+  for (const member of await readMembers()) {
+    if (!member.visible || member.contactId === viewerContactId) continue
+
+    for (const booking of member.bookings) {
+      if (!wanted.has(booking.classEventId)) continue
+      ;(going[booking.classEventId] ??= []).push({
+        contactId: member.contactId,
+        name: memberName(member),
+        state: booking.state,
+      })
+    }
   }
 
-  // Seats before waiting-list places, then alphabetically, so the order a
-  // member sees is stable between renders rather than however Postgres felt.
+  // Seats before waiting-list places, then alphabetically, so the order is
+  // stable between renders.
   for (const list of Object.values(going)) {
     list.sort((a, b) =>
-      a.state === b.state ? a.name.localeCompare(b.name) : a.state === 'booked' ? -1 : 1,
-    )
+      a.state === b.state ? a.name.localeCompare(b.name) : a.state === 'booked' ? -1 : 1)
   }
 
   return going
 }
 
-/** Every member who has ever signed in, for the People page. */
-export async function allMembers(viewerContactId: string) {
-  const from = today()
-
-  const rows = await useDb()
-    .select({
-      contactId: users.contactId,
-      givenName: users.givenName,
-      familyName: users.familyName,
-      visible: users.visible,
-      lastSyncedAt: users.lastSyncedAt,
-      classEventId: bookings.classEventId,
-      startedAt: bookings.startedAt,
-      state: bookings.state,
-    })
-    .from(users)
-    .leftJoin(
-      bookings,
-      and(eq(bookings.userId, users.id), gte(bookings.startedAt, `${from}T00:00:00`)),
-    )
-    .where(eq(users.visible, true))
-    .orderBy(users.givenName, desc(bookings.startedAt))
-
-  const members = new Map<
-    string,
-    { contactId: string, name: string, isYou: boolean, upcoming: number, next: string | null }
-  >()
-
-  for (const row of rows) {
-    const existing = members.get(row.contactId) ?? {
-      contactId: row.contactId,
-      name: `${row.givenName} ${row.familyName}`.trim() || 'A member',
-      isYou: row.contactId === viewerContactId,
-      upcoming: 0,
-      next: null as string | null,
-    }
-
-    if (row.startedAt && row.state === 'booked') {
-      existing.upcoming += 1
-      if (!existing.next || row.startedAt < existing.next) existing.next = row.startedAt
-    }
-
-    members.set(row.contactId, existing)
-  }
-
-  return [...members.values()].sort((a, b) => b.upcoming - a.upcoming || a.name.localeCompare(b.name))
+export interface MemberSummary {
+  contactId: string
+  name: string
+  isYou: boolean
+  /** Count of upcoming booked classes. */
+  upcoming: number
+  /** Naive start of their next class, if any. */
+  next: string | null
+  /** Recent gym visits, newest first. Empty when they do not share them. */
+  visits: Visit[]
 }
 
+/** Every visible member, for the People page. */
+export async function memberSummaries(viewerContactId: string): Promise<MemberSummary[]> {
+  const floor = `${today()}T00:00:00`
+
+  const summaries = (await readMembers())
+    .filter(member => member.visible)
+    .map(member => {
+      const upcoming = member.bookings
+        .filter(booking => booking.state === 'booked' && booking.startedAt >= floor)
+        .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+
+      return {
+        contactId: member.contactId,
+        name: memberName(member),
+        isYou: member.contactId === viewerContactId,
+        upcoming: upcoming.length,
+        next: upcoming[0]?.startedAt ?? null,
+        visits: member.shareEntries ? toVisits(member.entries) : [],
+      }
+    })
+
+  return summaries.sort((a, b) => b.upcoming - a.upcoming || a.name.localeCompare(b.name))
+}
+
+export { type Member, readMembers }

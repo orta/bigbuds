@@ -156,6 +156,28 @@ export interface Attendee {
   cancelDelayOver?: boolean
 }
 
+/**
+ * A badge scan at a door, from the access-control system.
+ *
+ * The collection is readable but oddly shaped: a bare `GET /entries` is 403,
+ * and it only answers with a filter present — yet the `targetId` filter's
+ * *value* is ignored, and the server always scopes the result to the
+ * authenticated member. Passing your own contact IRI is therefore both the
+ * honest thing to ask for and the thing that makes the request work at all.
+ * There is no way to read anybody else's.
+ */
+export interface Entry {
+  '@id': string
+  /** Contact IRI of whoever badged in. Always the authenticated member. */
+  targetId?: string | null
+  /** IRI of the door, e.g. `/bigbox/crossing_points/155`. */
+  crossingPoint?: string | null
+  /** Naive timestamp of the scan, in the club's wall clock. */
+  createdAt?: string | null
+  /** `badge`, and in principle other identification methods. */
+  type?: string | null
+}
+
 export interface Activity {
   '@id': string
   name?: string | null
@@ -477,7 +499,16 @@ function withQuery(url: string, query: Query): string {
   for (const [key, value] of Object.entries(query)) {
     if (value !== undefined) params.append(key, String(value))
   }
-  const search = params.toString()
+
+  // Slashes go back in literally. Almost every filter value here is an IRI
+  // (`/bigbox/contacts/2327536`), and `URLSearchParams` escapes the slashes to
+  // `%2F` — which the `entries` collection's authorisation check rejects with
+  // a 403, while the identical request with literal slashes returns 200.
+  // Whatever that check matches on, it is looking at the raw query string. A
+  // bare `/` is legal in a query per RFC 3986, the club's own web app sends
+  // them that way, and every other collection accepts both, so this is applied
+  // everywhere rather than special-cased for one endpoint.
+  const search = params.toString().replace(/%2F/g, '/')
   return search ? `${url}?${search}` : url
 }
 
@@ -685,6 +716,19 @@ export class Client {
       const right = (b.classEvent && classStart(b.classEvent)) ?? ''
       return left.localeCompare(right)
     })
+  }
+
+  /**
+   * Fetches this member's recent badge scans, oldest first.
+   *
+   * How far back the club keeps these is not established — the only account
+   * available to test against was four days old and had visited twice, so five
+   * records is equally consistent with "all of it" and "a short window". The
+   * caller accumulates what it sees rather than assuming either.
+   */
+  async entries(contactId: string): Promise<Entry[]> {
+    const entries = await this.getAll<Entry>('entries', { targetId: contactId })
+    return entries.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''))
   }
 
   /** Fetches one class event by IRI or numeric id. */

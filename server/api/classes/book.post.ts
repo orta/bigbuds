@@ -7,7 +7,7 @@
  */
 
 import { z } from 'zod'
-import { clientFor, syncBookings } from '../../utils/members'
+import { clientFor, syncMember } from '../../utils/members'
 import { isQueued } from '../../utils/resamania'
 import { invalidatePlanning } from '../../utils/planning'
 import { requireMember } from '../../utils/session'
@@ -24,7 +24,7 @@ export default defineEventHandler(async event => {
   const attendee = await client.book(classEventId)
 
   invalidatePlanning()
-  await syncBookings(member).catch(error => {
+  await syncMember(member).catch(error => {
     // The booking itself succeeded; a failed snapshot only delays other
     // members seeing it, and the scheduled sync will pick it up.
     console.error('Post-booking sync failed', error)

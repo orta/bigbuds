@@ -1,25 +1,25 @@
 /**
  * Session helpers.
  *
- * The session cookie holds only an id and some display fields — never tokens
- * or credentials. The member's real BigBox session lives server-side in the
- * client cache, keyed off the row this looks up.
+ * The session cookie holds display fields and the contact IRI. The member's
+ * real BigBox session lives server-side in the client cache, keyed off the
+ * record this looks up.
  */
 
 import type { H3Event } from 'h3'
-import type { User } from '../database/schema'
-import { findUser } from './members'
+import { findMember, memberName } from './members'
+import type { Member } from './store'
 
 /**
- * The signed-in member's row, or a 401.
+ * The signed-in member's record, or a 401.
  *
- * The user is re-read from the database on every request rather than trusted
- * from the cookie, so revoking someone — or their own visibility change —
- * takes effect immediately rather than whenever their cookie happens to expire.
+ * Re-read from the store on every request rather than trusted from the cookie,
+ * so a settings change takes effect immediately rather than whenever the
+ * cookie happens to expire.
  */
-export async function requireMember(event: H3Event): Promise<User> {
+export async function requireMember(event: H3Event): Promise<Member> {
   const { user } = await requireUserSession(event)
-  const member = await findUser(user.id)
+  const member = await findMember(user.contactId)
 
   if (!member) {
     await clearUserSession(event)
@@ -30,14 +30,14 @@ export async function requireMember(event: H3Event): Promise<User> {
 }
 
 /** The subset of a member that is safe to put in a cookie and send to the browser. */
-export function sessionUser(user: User) {
+export function sessionUser(member: Member) {
   return {
-    id: user.id,
-    contactId: user.contactId,
-    email: user.email,
-    name: `${user.givenName} ${user.familyName}`.trim(),
-    givenName: user.givenName,
-    membershipNumber: user.membershipNumber,
-    visible: user.visible,
+    contactId: member.contactId,
+    email: member.email,
+    name: memberName(member),
+    givenName: member.givenName,
+    membershipNumber: member.membershipNumber,
+    visible: member.visible,
+    shareEntries: member.shareEntries,
   }
 }

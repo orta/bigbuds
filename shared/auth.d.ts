@@ -1,18 +1,20 @@
 /**
  * The session cookie's contents.
  *
- * Display fields and an id only — never tokens, never the password. The real
- * BigBox session lives server-side, keyed off `id`.
+ * Display fields and the contact IRI only — never tokens, never the password.
+ * The member's real BigBox session lives server-side in the client cache,
+ * keyed off `contactId`.
  */
 declare module '#auth-utils' {
   interface User {
-    id: number
+    /** IRI, e.g. `/bigbox/contacts/2327536`. The identity everything hangs off. */
     contactId: string
     email: string
     name: string
     givenName: string
     membershipNumber: string
     visible: boolean
+    shareEntries: boolean
   }
 }
 

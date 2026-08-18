@@ -5,7 +5,7 @@
     "buildCommand": "yarn build"
   },
   "deploy": {
-    "startCommand": "yarn db:migrate && node .output/server/index.mjs",
+    "startCommand": "node .output/server/index.mjs",
     "healthcheckPath": "/login",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3,

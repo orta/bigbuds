@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod'
-import { signIn, syncBookings } from '../../utils/members'
+import { signIn, syncMember } from '../../utils/members'
 import { ApiError } from '../../utils/resamania'
 import { sessionUser } from '../../utils/session'
 
@@ -19,17 +19,17 @@ export default defineEventHandler(async event => {
   const { email, password } = await readValidatedBody(event, Body.parse)
 
   try {
-    const user = await signIn(email, password)
-    await setUserSession(event, { user: sessionUser(user) })
+    const member = await signIn(email, password)
+    await setUserSession(event, { user: sessionUser(member) })
 
     // Snapshot their bookings now so they show up to everyone else straight
     // away rather than at the next scheduled sync. Failing here should not
     // fail the login — they are signed in either way.
-    await syncBookings(user).catch(error => {
-      console.error('Initial booking sync failed', error)
+    await syncMember(member).catch(error => {
+      console.error('Initial sync failed', error)
     })
 
-    return { user: sessionUser(user) }
+    return { user: sessionUser(member) }
   } catch (error) {
     if (error instanceof ApiError && error.kind === 'invalid_credentials') {
       throw createError({

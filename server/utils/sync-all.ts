@@ -1,15 +1,13 @@
 /**
- * The scheduled refresh of everyone's bookings.
+ * The scheduled refresh of everyone's bookings and visits.
  *
  * This is what stored credentials buy: a member who booked something in the
  * club's own app, and has not opened this one since, still shows up correctly
- * on everyone else's grid.
+ * on everyone else's grid. It is also the only way a week of visit history
+ * gets built, since the club's API only offers a short window of recent scans.
  */
 
-import { eq } from 'drizzle-orm'
-import { users } from '../database/schema'
-import { useDb } from './db'
-import { forgetClient, syncBookings } from './members'
+import { forgetClient, readMembers, recordSyncFailure, syncMember } from './members'
 import { ApiError } from './resamania'
 
 export interface SyncReport {
@@ -20,16 +18,14 @@ export interface SyncReport {
 }
 
 export async function syncAllMembers(): Promise<SyncReport> {
-  const db = useDb()
-  const everyone = await db.select().from(users)
-
+  const everyone = await readMembers()
   const report: SyncReport = { members: everyone.length, synced: 0, failed: 0, errors: [] }
 
   // Sequential on purpose. This is the club's API, not ours, and a handful of
   // members every quarter of an hour is not worth a burst of parallel logins.
   for (const member of everyone) {
     try {
-      await syncBookings(member)
+      await syncMember(member)
       report.synced += 1
     } catch (error) {
       report.failed += 1
@@ -46,7 +42,7 @@ export async function syncAllMembers(): Promise<SyncReport> {
       // A stored password that no longer works will not start working, so drop
       // the cached client and record why, for the UI to surface.
       forgetClient(member.contactId)
-      await db.update(users).set({ syncError: message }).where(eq(users.id, member.id))
+      await recordSyncFailure(member.contactId, message)
     }
   }
 

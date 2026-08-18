@@ -4,7 +4,7 @@
  */
 
 import { z } from 'zod'
-import { clientFor, syncBookings } from '../../utils/members'
+import { clientFor, syncMember } from '../../utils/members'
 import { today } from '#shared/naive'
 import { invalidatePlanning } from '../../utils/planning'
 import { requireMember } from '../../utils/session'
@@ -32,7 +32,7 @@ export default defineEventHandler(async event => {
   await client.cancel(attendeeId)
 
   invalidatePlanning()
-  await syncBookings(member).catch(error => {
+  await syncMember(member).catch(error => {
     console.error('Post-cancellation sync failed', error)
   })
 

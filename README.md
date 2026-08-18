@@ -39,8 +39,8 @@ whole without them looking bookable.
 ## How the shared view works
 
 BigBox is the source of truth for the timetable and for who is booked onto what. This app's own
-database holds only the two things the club's API has no concept of: that a member has joined
-*this* app, and a snapshot of their upcoming bookings.
+store holds only the things the club's API has no concept of: that a member has joined *this*
+app, a snapshot of their upcoming bookings, and a rolling week of their gym visits.
 
 Members' bookings are refreshed three ways, so the shared view stays close to live:
 
@@ -49,6 +49,29 @@ Members' bookings are refreshed three ways, so the shared view stays close to li
 - and every 15 minutes by a scheduled task, for bookings made in the club's own app.
 
 That last one is why the app stores credentials — see below.
+
+**Gym hours.** The club's access control records a row per badge scan at a door, and those are
+accumulated into a rolling week so the People page can say roughly when somebody trains. This has
+its own switch, separate from class visibility, because wanting your classes public and your
+comings and goings private is an entirely reasonable position. Turning it off deletes what was
+collected rather than hiding it.
+
+## Storage
+
+One JSON file per member under `BIGBUDS_DATA_DIR`, on a mounted disk. This was Postgres to begin
+with, which was more machinery than the data justifies: there is no querying to speak of — every
+read is "all members" or "one member by id" — the whole set is a few dozen records at a gym's
+scale, and a volume costs less than a database.
+
+Three things make that safe rather than merely cheap. Writes go to a temporary file and are
+renamed over the target, and POSIX rename is atomic, so a crash mid-write leaves the old file or
+the new one and never a half-written one. Writes to a single member are serialised through a
+promise chain, so a booking sync and a settings change arriving together cannot clobber each
+other. And everything is held in memory after first load, which is only sound because every write
+goes through one place.
+
+The trade is that it does not survive running on two machines at once, which is why
+`railway.json` pins a single replica.
 
 ## A note on credentials
 
@@ -95,6 +118,12 @@ COSMIC app. A few things about the API shaped it, and are worth knowing before c
   attendee lists. So `GET /api/bookings` re-fetches each class in full, otherwise the queue behind
   your own waiting-list place would be invisible on the one page that most needs to show it. Those
   fetches are cached and shared between members going to the same class.
+- **Query values keep their literal slashes.** Nearly every filter value is an IRI, and
+  `URLSearchParams` escapes the slashes to `%2F` — which the `entries` collection's authorisation
+  check rejects with a 403, while the byte-identical request with literal slashes returns 200.
+  Whatever that check matches on, it reads the raw query string. `/` is legal in a query per RFC
+  3986 and every other collection accepts both forms, so the client un-escapes slashes everywhere
+  rather than special-casing one endpoint.
 - **`myBookings()` returns your entire history**, including classes attended months ago — those
   attendee records are never cleaned up. Use `bookingsFrom(date)` unless you want the history.
 - **Cancelling is a state transition**, not a delete: `POST /attendees/{id}/transitions`. The
@@ -107,6 +136,32 @@ same bytes — safe only because neither response is personalised, which is why 
 computed from the embedded attendee lists afterwards rather than requested per-user. And
 `POST /api/classes/cancel` re-reads the member's own bookings before acting, because the attendee
 IRI arrives from the browser and would otherwise cancel any booking at the club given its id.
+
+## Gym visits
+
+`GET /bigbox/entries` returns badge scans: a timestamp, a door, and nothing saying which way the
+member was walking. Three things about it shaped `shared/visits.ts`:
+
+- **You can only ever read your own.** The `targetId` filter's *value* is ignored — passing
+  another member's contact IRI, or a nonexistent one, still returns your own records. A bare
+  request with no filter at all is a 403. So the collection is scoped server-side, and there is no
+  way to read anybody else's movements. That fits how the rest of the app works: each member's own
+  session collects their own data.
+- **Direction has to be inferred.** The doors evidently know — the collection can be filtered on
+  `crossingPoint.entryZone` and `crossingPoint.exitZone` — but `crossing_points` is closed to
+  members, 403 on the collection and on each door, so their names are unavailable. Within a visit
+  the first scan is the arrival and the last is the departure, which is enough. Scans are grouped
+  into visits by a three-hour gap rather than by calendar date, so a morning session and an evening
+  one do not merge into one eleven-hour visit.
+- **How far back the club keeps them is not established.** The only account available to test
+  against was four days old and had visited twice, so the five records it returned are equally
+  consistent with "all of it" and "a short window". Rather than depend on the answer, the scheduled
+  sync accumulates what it sees and prunes past a week.
+
+One thing worth knowing if you change how the pattern is summarised: a median arrival is only
+quoted when the arrivals actually cluster. Someone who came once at 09:25 and once at 19:11 has a
+median of 14:18 — an afternoon they were never there — so `usualPattern` reports `consistent:
+false` and the UI says the visits vary instead. There is a test pinning that exact case.
 
 ## Wall-clock times
 
@@ -132,7 +187,7 @@ so new classes still land somewhere sensible rather than disappearing.
 
 ## Running it locally
 
-Needs Node 20+ and a Postgres.
+Needs Node 22+. No database.
 
 ```sh
 yarn install
@@ -150,10 +205,10 @@ openssl rand -base64 32   # BIGBUDS_ENCRYPTION_KEY
 Then:
 
 ```sh
-createdb bigbuds
-yarn db:migrate
 yarn dev
 ```
+
+Data lands in `./.data` unless `BIGBUDS_DATA_DIR` says otherwise.
 
 Sign in with a real BigBox membership — there is no separate registration, because the membership
 *is* the account.
@@ -163,26 +218,28 @@ Sign in with a real BigBox membership — there is no separate registration, bec
 | `yarn dev` | development server on :3000 |
 | `yarn test` | unit tests |
 | `yarn lint` | eslint |
-| `yarn db:generate` | write a migration after changing `server/database/schema.ts` |
-| `yarn db:migrate` | apply migrations |
-| `yarn db:studio` | browse the database |
 
 The tests cover the category table, search matching, the capacity and booking-state logic in the
-API client, and the wall-clock arithmetic across both DST transitions. They are all pure
+API client, the wall-clock arithmetic across both DST transitions, and grouping badge scans into
+visits — the last of those pinned against scans the club actually produced. They are all pure
 functions — nothing in the suite talks to BigBox.
 
 ## Deploying to Railway
 
-1. Create a project and add a **Postgres** database. Railway injects `DATABASE_URL`.
-2. Point a service at this repo. [`railway.json`](./railway.json) sets the build and start
-   commands; migrations run on boot.
-3. Set the remaining variables on the service:
+1. Point a service at this repo. [`railway.json`](./railway.json) sets the build and start
+   commands.
+2. Add a **volume** and mount it somewhere — `/data` is the obvious choice.
+3. Set the variables on the service:
 
    | Variable | |
    | --- | --- |
+   | `BIGBUDS_DATA_DIR` | the volume's mount path, e.g. `/data` — **without this the store lands on the container's ephemeral disk and every member is signed out on each deploy** |
    | `NUXT_SESSION_PASSWORD` | seals the session cookie |
    | `BIGBUDS_ENCRYPTION_KEY` | encrypts stored passwords — **back this up**, losing it signs everyone out permanently |
    | `BIGBUDS_SYNC_TOKEN` | optional; only if driving the sync externally |
+
+Node version comes from [`.nvmrc`](./.nvmrc) and `engines.node`. Nixpacks reads those; with
+neither it picks a default old enough that `yarn install` fails outright on modern dependencies.
 
 `numReplicas` is deliberately 1. The 15-minute sync runs in-process, so a second replica would
 sign in as every member a second time on the same schedule for no benefit. If you do need to scale
