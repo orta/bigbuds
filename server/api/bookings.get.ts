@@ -60,7 +60,12 @@ export default defineEventHandler(async event => {
         tags: info.tags,
         // Everything here is upcoming by construction, filtered above.
         finished: false,
+        attendedCount: entry.activityId ? (member.attended[entry.activityId]?.count ?? 0) : 0,
+        attendedLast: entry.activityId ? (member.attended[entry.activityId]?.lastAt ?? null) : null,
         going: [],
+        // "Usually around" is a browsing aid for the timetable; on a class you
+        // are already booked onto it answers a question nobody is asking.
+        around: [],
       }
     }),
   )

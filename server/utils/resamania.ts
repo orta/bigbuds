@@ -363,6 +363,8 @@ export const clubName = (directory: Directory, event: ClassEvent) =>
 /** A `ClassEvent` with its references resolved — what a UI actually renders. */
 export interface PlanningEntry {
   id: string
+  /** IRI of the class type, e.g. `/bigbox/activities/2300`. */
+  activityId: string | null
   name: string
   colorHex: string | null
   coach: string | null
@@ -401,6 +403,7 @@ export function resolve(
 ): PlanningEntry {
   return {
     id: event['@id'],
+    activityId: event.activity ?? null,
     name: activityName(directory, event) ?? 'Class',
     colorHex: activityColor(directory, event),
     coach: coachName(directory, event),

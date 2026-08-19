@@ -7,6 +7,74 @@ import type { ClassRow } from '#shared/types'
 useHead({ title: 'Timetable · BigBuds' })
 
 const toast = useToast()
+const { user, fetch: refreshSession } = useUserSession()
+
+/**
+ * Display preferences, persisted per member.
+ *
+ * Held locally and written back on change so the timetable reacts at once
+ * rather than waiting for a round trip; the request that saves them is what
+ * makes the choice survive to the next visit.
+ */
+const hiddenCategories = ref(new Set(user.value?.hiddenCategories ?? []))
+const hideFinished = ref(user.value?.hideFinished ?? false)
+
+async function savePreferences() {
+  try {
+    await $fetch('/api/me', {
+      method: 'PATCH',
+      body: {
+        hiddenCategories: [...hiddenCategories.value],
+        hideFinished: hideFinished.value,
+      },
+    })
+    await refreshSession()
+  } catch {
+    toast.add({
+      title: 'Could not save that preference',
+      description: 'It applies for now, but will not be remembered.',
+      color: 'error',
+      icon: 'i-lucide-alert-circle',
+    })
+  }
+}
+
+function toggleCategory(category: Category, shown: boolean) {
+  if (shown) hiddenCategories.value.delete(category)
+  else hiddenCategories.value.add(category)
+  // A Set mutates in place, so nudge reactivity before saving.
+  triggerRef(hiddenCategories)
+  savePreferences()
+}
+
+function toggleFinished(hidden: boolean) {
+  hideFinished.value = hidden
+  savePreferences()
+}
+
+/** The filter menu, with a count of what each category holds today. */
+const filterItems = computed(() => [
+  CATEGORY_ORDER.map((category: Category) => ({
+    label: CATEGORIES[category].label,
+    icon: CATEGORIES[category].icon,
+    type: 'checkbox' as const,
+    checked: !hiddenCategories.value.has(category),
+    onUpdateChecked: (checked: boolean) => toggleCategory(category, checked),
+    // Keep the menu open: hiding several categories in a row is the normal
+    // way to use this.
+    onSelect: (payload: Event) => payload.preventDefault(),
+  })),
+  [{
+    label: 'Hide classes that have finished',
+    icon: 'i-lucide-history',
+    type: 'checkbox' as const,
+    checked: hideFinished.value,
+    onUpdateChecked: toggleFinished,
+    onSelect: (payload: Event) => payload.preventDefault(),
+  }],
+])
+
+const hiddenCount = computed(() => hiddenCategories.value.size + (hideFinished.value ? 1 : 0))
 
 /**
  * The club publishes about a fortnight ahead, which is also as far as anyone
@@ -26,8 +94,18 @@ const { data, status, refresh } = await useFetch('/api/planning', {
 
 const entries = computed<ClassRow[]>(() => (data.value?.entries ?? []) as ClassRow[])
 
+/**
+ * The single filtered list both views render from.
+ *
+ * Deliberately one computed rather than one per view: the hidden categories
+ * have to apply to the chronological list as well as the grouped one, and two
+ * filter implementations would eventually disagree.
+ */
 const visible = computed(() =>
-  entries.value.filter(entry => matchesQuery(entry.name, query.value)))
+  entries.value.filter(entry =>
+    matchesQuery(entry.name, query.value)
+    && !hiddenCategories.value.has(entry.category)
+    && !(hideFinished.value && entry.finished)))
 
 /**
  * Classes grouped under the curated headings, empty categories dropped.
@@ -134,15 +212,27 @@ const describe = (error: unknown) =>
         </p>
       </div>
 
-      <UTabs
-        v-model="grouping"
-        size="xs"
-        :content="false"
-        :items="[
-          { label: 'By category', value: 'category', icon: 'i-lucide-layout-list' },
-          { label: 'By time', value: 'time', icon: 'i-lucide-clock' },
-        ]"
-      />
+      <div class="flex items-center gap-2">
+        <UDropdownMenu :items="filterItems" :ui="{ content: 'w-64' }">
+          <UButton
+            icon="i-lucide-sliders-horizontal"
+            :label="hiddenCount ? `Filters (${hiddenCount})` : 'Filters'"
+            :color="hiddenCount ? 'primary' : 'neutral'"
+            :variant="hiddenCount ? 'soft' : 'ghost'"
+            size="xs"
+          />
+        </UDropdownMenu>
+
+        <UTabs
+          v-model="grouping"
+          size="xs"
+          :content="false"
+          :items="[
+            { label: 'By category', value: 'category', icon: 'i-lucide-layout-list' },
+            { label: 'By time', value: 'time', icon: 'i-lucide-clock' },
+          ]"
+        />
+      </div>
     </div>
 
     <!-- Day picker: a fortnight, scrolling sideways on a phone. -->
@@ -187,10 +277,13 @@ const describe = (error: unknown) =>
       icon="i-lucide-calendar-x"
       color="neutral"
       variant="subtle"
-      :title="query ? 'Nothing matches that search' : 'No classes on this day'"
+      :title="query ? 'Nothing matches that search'
+        : hiddenCount ? 'Everything here is filtered out'
+          : 'No classes on this day'"
       :description="query
         ? 'Try a broader word — legs, cardio, beginner — or clear the search.'
-        : 'Pick another day from the strip above.'"
+        : hiddenCount ? 'There are classes on this day, but your filters hide them all.'
+          : 'Pick another day from the strip above.'"
     />
 
     <!-- Grouped under the curated headings. -->
@@ -226,6 +319,7 @@ const describe = (error: unknown) =>
         :key="entry.id"
         :entry="entry"
         :pending="pendingId === entry.id"
+        show-around
         @book="book"
         @cancel="cancel"
       />

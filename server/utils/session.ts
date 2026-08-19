@@ -39,5 +39,7 @@ export function sessionUser(member: Member) {
     membershipNumber: member.membershipNumber,
     visible: member.visible,
     shareEntries: member.shareEntries,
+    hiddenCategories: member.hiddenCategories,
+    hideFinished: member.hideFinished,
   }
 }

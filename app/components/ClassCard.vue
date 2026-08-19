@@ -5,6 +5,12 @@ import { placesText, queuePositionText, timeRange } from '#shared/format'
 const props = defineProps<{
   entry: ClassRow
   pending?: boolean
+  /**
+   * Show who is usually at the club around this time. Only the chronological
+   * view asks for it — under a category heading the times jump around, so a
+   * "usually here now" note beside each row would be noise.
+   */
+  showAround?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -122,6 +128,16 @@ const initials = (name: string) =>
         <span :class="entry.isFull && !entry.isCancelled ? 'text-warning' : ''">{{ places }}</span>
       </p>
 
+      <!-- Been here before. The count is what makes it worth showing: "done
+           once" and "done thirty times" are different recommendations. -->
+      <p v-if="entry.attendedCount" class="mt-1 flex items-center gap-1 text-xs text-muted">
+        <UIcon name="i-lucide-rotate-ccw" class="size-3.5 shrink-0 text-primary" />
+        <span>
+          You have done this
+          {{ entry.attendedCount === 1 ? 'once' : `${entry.attendedCount} times` }}
+        </span>
+      </p>
+
       <!-- The point of the whole app. -->
       <div v-if="entry.going.length" class="mt-2 flex flex-wrap items-center gap-1.5">
         <UAvatarGroup size="2xs" :max="4">
@@ -140,7 +156,44 @@ const initials = (name: string) =>
       </div>
     </div>
 
-    <div class="flex shrink-0 items-center">
+    <div class="flex shrink-0 items-center gap-1.5">
+      <!-- Right-aligned: people who tend to be at the club around now, which
+           is a weaker signal than a booking and should not compete with it. -->
+      <UPopover v-if="showAround && entry.around.length" mode="hover">
+        <UButton
+          :label="String(entry.around.length)"
+          icon="i-lucide-user-round-check"
+          color="neutral"
+          variant="ghost"
+          size="xs"
+          :aria-label="`${entry.around.length} usually here around now`"
+        />
+
+        <template #content>
+          <div class="max-w-72 p-3">
+            <p class="mb-2 text-sm font-medium">
+              Usually here around now
+            </p>
+            <ul class="space-y-1.5">
+              <li
+                v-for="person in entry.around"
+                :key="person.contactId"
+                class="flex items-baseline justify-between gap-3 text-sm"
+              >
+                <span class="truncate">{{ person.name }}</span>
+                <span class="shrink-0 font-mono text-xs tabular-nums text-muted">
+                  {{ person.arrived }}–{{ person.left }}
+                </span>
+              </li>
+            </ul>
+            <p class="mt-2 text-xs text-dimmed">
+              From when they were in on this day previously — they are not
+              booked onto this class.
+            </p>
+          </div>
+        </template>
+      </UPopover>
+
       <UButton
         v-if="action"
         :label="action.label"

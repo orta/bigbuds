@@ -37,6 +37,19 @@ export interface StoredBooking {
   startedAt: string
 }
 
+/**
+ * A class type the member has been to before, keyed by activity IRI.
+ *
+ * Keyed by IRI rather than by name so a class the club renames does not look
+ * like one you have never done.
+ */
+export interface Attended {
+  /** How many times they have been. */
+  count: number
+  /** Naive start of the most recent one. */
+  lastAt: string
+}
+
 /** One badge scan at a door. */
 export interface StoredEntry {
   /** IRI, e.g. `/bigbox/entries/38364921`. */
@@ -66,6 +79,16 @@ export interface Member {
   shareEntries: boolean
 
   /**
+   * Categories this member has hidden from their own timetable, by key.
+   *
+   * A display preference, not a privacy one — it changes what they see, never
+   * what anyone else does.
+   */
+  hiddenCategories: string[]
+  /** Whether to drop classes that have already started from the timetable. */
+  hideFinished: boolean
+
+  /**
    * Set when the background sync could not sign in — almost always because
    * they changed their BigBox password. Surfaced as a prompt to sign in again
    * rather than failing silently.
@@ -79,6 +102,17 @@ export interface Member {
 
   bookings: StoredBooking[]
   entries: StoredEntry[]
+
+  /** Class types they have been to, keyed by activity IRI. */
+  attended: Record<string, Attended>
+  /**
+   * When the attendance history was last rebuilt.
+   *
+   * Rebuilding walks the member's entire booking history, which is many pages
+   * for a long-standing member, so it runs daily rather than every sync — the
+   * answer only changes when a class passes.
+   */
+  attendedSyncedAt: string | null
 }
 
 /** Where the JSON lives. Railway mounts a volume; locally it is `./.data`. */
@@ -151,8 +185,12 @@ function withDefaults(member: Member): Member {
     ...member,
     visible: member.visible ?? true,
     shareEntries: member.shareEntries ?? true,
+    hiddenCategories: member.hiddenCategories ?? [],
+    hideFinished: member.hideFinished ?? false,
     bookings: member.bookings ?? [],
     entries: member.entries ?? [],
+    attended: member.attended ?? {},
+    attendedSyncedAt: member.attendedSyncedAt ?? null,
     syncError: member.syncError ?? null,
     lastSyncedAt: member.lastSyncedAt ?? null,
   }

@@ -8,12 +8,13 @@
  * assembled from those snapshots. Nobody ever holds anybody else's credentials.
  */
 
-import { parseNaive, today } from '#shared/naive'
+import { naiveNow, naiveTime, parseNaive, today } from '#shared/naive'
 import type { Visit } from '#shared/visits'
-import { toVisits } from '#shared/visits'
+import { toVisits, weekdayOf } from '#shared/visits'
 import { decrypt, encrypt } from './crypto'
+import type { Attendee } from './resamania'
 import { Client, classStart, isActive, isQueued } from './resamania'
-import { type Member, readMember, readMembers, writeMember } from './store'
+import { type Attended, type Member, readMember, readMembers, writeMember } from './store'
 
 /**
  * How much visit history to keep per member.
@@ -23,6 +24,16 @@ import { type Member, readMember, readMembers, writeMember } from './store'
  * comings and goings. Anything older is dropped on every sync.
  */
 export const ENTRY_RETENTION_DAYS = 7
+
+/**
+ * How often to rebuild the attendance history.
+ *
+ * Rebuilding walks a member's entire booking history, which the API returns
+ * over many pages for anyone who has been a member a while. The answer only
+ * changes when a booked class passes, so once a day is plenty and doing it on
+ * every fifteen-minute sync would be rude to the club's API for nothing.
+ */
+const ATTENDED_REFRESH_MS = 24 * 60 * 60_000
 
 // --- Live API clients ---
 
@@ -81,8 +92,12 @@ export async function signIn(email: string, password: string): Promise<Member> {
     // Settings a returning member has already chosen must survive a re-login.
     visible: current?.visible ?? true,
     shareEntries: current?.shareEntries ?? true,
+    hiddenCategories: current?.hiddenCategories ?? [],
+    hideFinished: current?.hideFinished ?? false,
     bookings: current?.bookings ?? [],
     entries: current?.entries ?? [],
+    attended: current?.attended ?? {},
+    attendedSyncedAt: current?.attendedSyncedAt ?? null,
     createdAt: current?.createdAt ?? now,
 
     contactId: profile.contactId,
@@ -147,6 +162,11 @@ export async function syncMember(member: Member): Promise<{ bookings: number, en
     }]
   })
 
+  // Only when stale: this is the expensive call in the whole sync.
+  const attended = staleAttendance(member)
+    ? buildAttended(await client.myBookings(), naiveNow())
+    : null
+
   const cutoff = cutoffDate()
 
   const saved = await writeMember(member.contactId, current => {
@@ -162,6 +182,8 @@ export async function syncMember(member: Member): Promise<{ bookings: number, en
     return {
       ...base,
       bookings,
+      attended: attended ?? base.attended,
+      attendedSyncedAt: attended ? new Date().toISOString() : base.attendedSyncedAt,
       entries: base.shareEntries
         ? [...merged.values()].filter(entry => entry.at >= cutoff).sort((a, b) => a.at.localeCompare(b.at))
         : [],
@@ -172,6 +194,41 @@ export async function syncMember(member: Member): Promise<{ bookings: number, en
   })
 
   return { bookings: saved.bookings.length, entries: saved.entries.length }
+}
+
+function staleAttendance(member: Member): boolean {
+  if (!member.attendedSyncedAt) return true
+  return Date.now() - Date.parse(member.attendedSyncedAt) > ATTENDED_REFRESH_MS
+}
+
+/**
+ * Which class types this member has actually been to, and how often.
+ *
+ * Three exclusions, each of which would otherwise inflate the count: a
+ * cancelled booking is not an attendance, a waiting-list place that never got
+ * promoted is not one either, and a class in the future has not happened yet.
+ */
+export function buildAttended(attendees: Attendee[], now: string): Record<string, Attended> {
+  const attended: Record<string, Attended> = {}
+
+  for (const attendee of attendees) {
+    if (!isActive(attendee) || isQueued(attendee)) continue
+
+    const event = attendee.classEvent
+    const start = event ? classStart(event) : null
+    if (!event || !start || start >= now) continue
+
+    const activity = event.activity
+    if (!activity) continue
+
+    const existing = attended[activity]
+    attended[activity] = {
+      count: (existing?.count ?? 0) + 1,
+      lastAt: existing && existing.lastAt > start ? existing.lastAt : start,
+    }
+  }
+
+  return attended
 }
 
 /** The oldest visit timestamp worth keeping, as a naive wall-clock string. */
@@ -195,7 +252,7 @@ export async function recordSyncFailure(contactId: string, message: string) {
 /** Updates a member's sharing settings. */
 export function updateSettings(
   contactId: string,
-  settings: Partial<Pick<Member, 'visible' | 'shareEntries'>>,
+  settings: Partial<Pick<Member, 'visible' | 'shareEntries' | 'hiddenCategories' | 'hideFinished'>>,
 ): Promise<Member> {
   return writeMember(contactId, current => {
     const next = { ...current!, ...settings, updatedAt: new Date().toISOString() }
@@ -254,6 +311,62 @@ export async function alsoGoing(
   }
 
   return going
+}
+
+/** Somebody whose gym visits suggest they are usually here at a given time. */
+export interface AroundMember {
+  contactId: string
+  name: string
+  /** Start of their usual window on this weekday, `19:11`. */
+  arrived: string
+  /** End of it, `20:16`. */
+  left: string
+  /** How many visits on this weekday this is drawn from. */
+  seen: number
+}
+
+/**
+ * Who tends to be at the club on the same weekday as `date`.
+ *
+ * Drawn from the same weekday in previous weeks, never from `date` itself —
+ * "Sam is usually here about now" is a different claim from "Sam is here",
+ * and only the first is one a week of history can support.
+ *
+ * Members whose visits recorded no departure are left out: without both ends
+ * there is no window for a class time to fall inside, and inventing a
+ * plausible length would be making the answer up.
+ */
+export async function regularsOn(
+  date: string,
+  viewerContactId: string,
+): Promise<AroundMember[]> {
+  const weekday = weekdayOf(date)
+  const around: AroundMember[] = []
+
+  for (const member of await readMembers()) {
+    if (!member.visible || !member.shareEntries || member.contactId === viewerContactId) continue
+
+    const sameWeekday = toVisits(member.entries).filter(visit =>
+      visit.date !== date && weekdayOf(visit.date) === weekday && visit.left !== null)
+
+    if (!sameWeekday.length) continue
+
+    around.push({
+      contactId: member.contactId,
+      name: memberName(member),
+      arrived: sameWeekday.reduce((a, b) => (a.arrived <= b.arrived ? a : b)).arrived,
+      left: sameWeekday.reduce((a, b) => (a.left! >= b.left! ? a : b)).left!,
+      seen: sameWeekday.length,
+    })
+  }
+
+  return around.sort((a, b) => a.arrived.localeCompare(b.arrived))
+}
+
+/** Whether a class starting at `start` falls inside somebody's usual window. */
+export function isAround(member: AroundMember, start: string): boolean {
+  const at = naiveTime(start)
+  return at >= member.arrived && at <= member.left
 }
 
 export interface MemberSummary {

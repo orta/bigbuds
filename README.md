@@ -16,6 +16,20 @@ Strength & Weights, HIIT & Conditioning, Mind & Body, Reformer, EMS and so on �
 one-line explainer, because "EMS" and "Reformer" tell you nothing useful about what you would
 actually be doing. Toggle to **By time** for a flat chronological list instead.
 
+**Filters that stick.** Hide categories you never book — the kids' sessions, the inductions — and
+optionally drop classes that have already started. Both are per-member and apply to the
+chronological view as well as the grouped one.
+
+**Classes you know.** A class type you have been to before is marked with how many times, so a
+timetable of sixty-odd classes distinguishes the ones you already like from the ones you have
+never tried. Built from your BigBox booking history, keyed on the club's activity id so a renamed
+class does not read as new.
+
+**Who is usually around.** On the *By time* view, a class whose start falls inside somebody's
+usual hours on that weekday carries a right-aligned marker; hovering it names them and their
+window. This is a weaker signal than a booking and is presented as one — they are not going to
+that class, they simply tend to be at the club around then.
+
 **Search by what you want from a session**, not just the class name: `legs`, `strength`,
 `weights`, `core`, `beginner`, `low-impact`. Every class carries hand-written tags, so `legs`
 finds Body Pump and Spin as well as Legs, Bums and Tums. Multi-word queries narrow rather than
@@ -125,7 +139,10 @@ COSMIC app. A few things about the API shaped it, and are worth knowing before c
   3986 and every other collection accepts both forms, so the client un-escapes slashes everywhere
   rather than special-casing one endpoint.
 - **`myBookings()` returns your entire history**, including classes attended months ago — those
-  attendee records are never cleaned up. Use `bookingsFrom(date)` unless you want the history.
+  attendee records are never cleaned up. Use `bookingsFrom(date)` unless you want the history,
+  which the attendance tracking does — and because it is many pages for a long-standing member, it
+  is rebuilt daily rather than on every fifteen-minute sync. The answer only changes when a booked
+  class passes.
 - **Cancelling is a state transition**, not a delete: `POST /attendees/{id}/transitions`. The
   record survives with a `cancelled` state, which is why a cancelled booking still turns up in
   `bookedAttendees` and has to be filtered on `isActive`.
@@ -157,6 +174,12 @@ member was walking. Three things about it shaped `shared/visits.ts`:
   against was four days old and had visited twice, so the five records it returned are equally
   consistent with "all of it" and "a short window". Rather than depend on the answer, the scheduled
   sync accumulates what it sees and prunes past a week.
+
+The same data drives "who is usually around" on the timetable, drawn only from the same weekday in
+previous weeks and never from the day being viewed — "Sam is usually here about now" is a
+different claim from "Sam is here", and only the first is one a week of history supports. Members
+whose visits recorded no departure are left out of it: without both ends there is no window for a
+class time to fall inside, and inventing a plausible length would be making the answer up.
 
 One thing worth knowing if you change how the pattern is summarised: a median arrival is only
 quoted when the arrivals actually cluster. Someone who came once at 09:25 and once at 19:11 has a

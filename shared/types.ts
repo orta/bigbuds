@@ -18,8 +18,19 @@ export interface AlsoGoing {
 }
 
 /** One class on the timetable, resolved and merged with who else is going. */
+/** Somebody whose gym visits suggest they are usually here around now. */
+export interface AroundMember {
+  contactId: string
+  name: string
+  arrived: string
+  left: string
+  seen: number
+}
+
 export interface ClassRow {
   id: string
+  /** IRI of the class type, e.g. `/bigbox/activities/2300`. */
+  activityId: string | null
   name: string
   colorHex: string | null
   coach: string | null
@@ -56,6 +67,18 @@ export interface ClassRow {
   finished: boolean
 
   going: AlsoGoing[]
+
+  /** How many times the viewer has been to this class type before. */
+  attendedCount: number
+  /** Naive start of the last time they went, when they have. */
+  attendedLast: string | null
+  /**
+   * Members whose usual hours on this weekday cover this class's start.
+   *
+   * Not the same as `going`: these people are not booked onto the class, they
+   * are simply usually at the club around then.
+   */
+  around: AroundMember[]
 }
 
 export interface MemberRow {
