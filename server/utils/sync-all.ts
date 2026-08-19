@@ -7,7 +7,8 @@
  * gets built, since the club's API only offers a short window of recent scans.
  */
 
-import { forgetClient, readMembers, recordSyncFailure, syncMember } from './members'
+import { forgetClient, recordSyncFailure, syncMember } from './members'
+import { readMembers } from './store'
 import { ApiError } from './resamania'
 
 export interface SyncReport {

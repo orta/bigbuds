@@ -243,6 +243,11 @@ builds identically on a laptop.
    | `BIGBUDS_ENCRYPTION_KEY` | encrypts stored passwords — **back this up**, losing it signs everyone out permanently |
    | `BIGBUDS_SYNC_TOKEN` | optional; only if driving the sync externally |
 
+The container does not pin a port. Railway injects `PORT` and health-checks it, and Nitro
+resolves `NITRO_PORT` before `PORT` — so setting `NITRO_PORT` in the image makes the app listen on
+one port while the healthcheck knocks on another, which fails the deploy with a healthy-looking
+build and nothing in the logs to explain it.
+
 The container runs as root on purpose. Railway mounts volumes owned by root, and a non-root
 process cannot create the store directory inside one — which surfaces as a 500 on the first
 sign-in rather than an error at boot, so it looks like a broken app rather than a permissions

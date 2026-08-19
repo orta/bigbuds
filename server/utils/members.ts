@@ -292,4 +292,4 @@ export async function memberSummaries(viewerContactId: string): Promise<MemberSu
   return summaries.sort((a, b) => b.upcoming - a.upcoming || a.name.localeCompare(b.name))
 }
 
-export { type Member, readMembers }
+export type { Member }

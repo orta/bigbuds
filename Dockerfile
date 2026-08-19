@@ -27,7 +27,12 @@ FROM node:26-slim AS runtime
 
 WORKDIR /app
 ENV NODE_ENV=production
-ENV NITRO_PORT=3000
+
+# Listen on every interface, but let the platform choose the port. Railway
+# injects PORT and health-checks that, and Nitro resolves NITRO_PORT before
+# PORT — so pinning NITRO_PORT here makes the app listen on 3000 while the
+# healthcheck knocks on another door, which fails the deploy with nothing in
+# the logs to explain it. Nitro falls back to 3000 when PORT is unset.
 ENV NITRO_HOST=0.0.0.0
 
 # Runs as root, deliberately. Railway mounts a volume owned by root, and a
