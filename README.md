@@ -226,8 +226,13 @@ functions — nothing in the suite talks to BigBox.
 
 ## Deploying to Railway
 
-1. Point a service at this repo. [`railway.json`](./railway.json) sets the build and start
-   commands.
+Built from the [`Dockerfile`](./Dockerfile) rather than by Nixpacks. Nixpacks picks a Node
+version from a nixpkgs snapshot it controls, so `.nvmrc` and `engines` can only narrow the
+choice, never name a patch version — which produced two failed deploys in a row, first on Node 18
+and then on 24.10.0 when a transitive dependency wanted 24.15.0. The Dockerfile pins it and
+builds identically on a laptop.
+
+1. Point a service at this repo. [`railway.json`](./railway.json) selects the Dockerfile builder.
 2. Add a **volume** and mount it somewhere — `/data` is the obvious choice.
 3. Set the variables on the service:
 
@@ -238,8 +243,17 @@ functions — nothing in the suite talks to BigBox.
    | `BIGBUDS_ENCRYPTION_KEY` | encrypts stored passwords — **back this up**, losing it signs everyone out permanently |
    | `BIGBUDS_SYNC_TOKEN` | optional; only if driving the sync externally |
 
-Node version comes from [`.nvmrc`](./.nvmrc) and `engines.node`. Nixpacks reads those; with
-neither it picks a default old enough that `yarn install` fails outright on modern dependencies.
+The container runs as root on purpose. Railway mounts volumes owned by root, and a non-root
+process cannot create the store directory inside one — which surfaces as a 500 on the first
+sign-in rather than an error at boot, so it looks like a broken app rather than a permissions
+problem. If you would rather it did not, chown the mount path to the user you pick.
+
+A startup check logs whether the data directory is writable, and warns if `BIGBUDS_DATA_DIR` is
+unset in production, so a misconfigured volume announces itself in the deploy logs instead of at
+the first sign-in.
+
+`BIGBOX_EMAIL` and `BIGBOX_PASSWORD` are for poking the API by hand from a laptop. The deployed
+app never reads them — there is no reason for them to exist as service variables.
 
 `numReplicas` is deliberately 1. The 15-minute sync runs in-process, so a second replica would
 sign in as every member a second time on the same schedule for no benefit. If you do need to scale

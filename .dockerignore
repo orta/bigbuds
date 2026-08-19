@@ -1,0 +1,17 @@
+# Never let local state or secrets into an image.
+.env
+.env.*
+!.env.example
+.data
+
+node_modules
+.output
+.nuxt
+.nitro
+.cache
+dist
+
+.git
+.github
+*.log
+.DS_Store
