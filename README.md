@@ -11,10 +11,12 @@ timetable shows who else is going. Nobody ever holds anybody else's credentials.
 
 ## Features
 
-**Planning.** The club's timetable for any of the next 14 days, grouped into curated categories —
-Strength & Weights, HIIT & Conditioning, Mind & Body, Reformer, EMS and so on — each with a
-one-line explainer, because "EMS" and "Reformer" tell you nothing useful about what you would
-actually be doing. Toggle to **By time** for a flat chronological list instead.
+**Planning.** The club's timetable for every day the club will take a booking on — which is today
+plus eight, not the fortnight this offered to begin with: BigBox refuses anything further out, and
+a day picker that runs past that only offers classes whose Book button is going to fail. Grouped
+into curated categories — Strength & Weights, HIIT & Conditioning, Mind & Body, Reformer, EMS and
+so on — each with a one-line explainer, because "EMS" and "Reformer" tell you nothing useful about
+what you would actually be doing. Toggle to **By time** for a flat chronological list instead.
 
 **Filters that stick.** Hide categories you never book — the kids' sessions, the inductions — and
 optionally drop classes that have already started. Both are per-member and apply to the

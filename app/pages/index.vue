@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { CATEGORIES, CATEGORY_ORDER, matchesQuery, type Category } from '#shared/categories'
 import { relativeDayLabel, dayLabel } from '#shared/format'
+import { bookableDays, lastBookableDate } from '#shared/booking'
 import { addDays, today as clubToday } from '#shared/naive'
 import type { ClassRow } from '#shared/types'
 
@@ -77,12 +78,14 @@ const filterItems = computed(() => [
 const hiddenCount = computed(() => hiddenCategories.value.size + (hideFinished.value ? 1 : 0))
 
 /**
- * The club publishes about a fortnight ahead, which is also as far as anyone
- * plans. `today()` is the club's own date, not the browser's.
+ * The days on offer, which are exactly the days the club will take a booking
+ * for — see `#shared/booking`. `today()` is the club's own date, not the
+ * browser's.
  */
 const today = clubToday()
 const tomorrow = addDays(today, 1)
-const days = Array.from({ length: 14 }, (_, offset) => addDays(today, offset))
+const days = bookableDays(today)
+const lastBookable = lastBookableDate(today)
 
 const date = ref(today)
 const query = ref('')
@@ -235,8 +238,8 @@ const describe = (error: unknown) =>
       </div>
     </div>
 
-    <!-- Day picker: a fortnight, scrolling sideways on a phone. -->
-    <div class="-mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4 pb-1">
+    <!-- Day picker: the booking window, scrolling sideways on a phone. -->
+    <div class="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1">
       <UButton
         v-for="day in days"
         :key="day"
@@ -248,6 +251,12 @@ const describe = (error: unknown) =>
         @click="date = day"
       />
     </div>
+
+    <!-- Why the strip stops where it does, rather than leaving it to be
+         discovered by a booking that fails. -->
+    <p class="mb-4 mt-1.5 text-xs text-dimmed">
+      BigBox takes bookings up to {{ dayLabel(lastBookable) }}.
+    </p>
 
     <UInput
       v-model="query"
