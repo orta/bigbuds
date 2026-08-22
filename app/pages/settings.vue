@@ -8,6 +8,42 @@ const visible = ref(user.value?.visible ?? true)
 const shareEntries = ref(user.value?.shareEntries ?? true)
 const saving = ref(false)
 
+/**
+ * Who this member has let book for them.
+ *
+ * Read from the server rather than from the session's list of ids, because
+ * this is the one place the names have to appear even for somebody who has
+ * since hidden themselves from the People page — otherwise a permission could
+ * be held by a name the member can no longer see, and never withdrawn.
+ */
+const { data: people, refresh: refreshPeople } = await useFetch('/api/people')
+const canBookYou = computed(() => people.value?.canBookYou ?? [])
+const revoking = ref<string | null>(null)
+
+async function revoke(person: { contactId: string, name: string }) {
+  revoking.value = person.contactId
+  try {
+    await $fetch('/api/me', {
+      method: 'PATCH',
+      body: {
+        bookableBy: canBookYou.value
+          .filter(other => other.contactId !== person.contactId)
+          .map(other => other.contactId),
+      },
+    })
+    await Promise.all([refreshSession(), refreshPeople()])
+    toast.add({
+      title: `${person.name} can no longer book you in`,
+      icon: 'i-lucide-user-x',
+      color: 'neutral',
+    })
+  } catch {
+    toast.add({ title: 'Could not save that', color: 'error', icon: 'i-lucide-alert-circle' })
+  } finally {
+    revoking.value = null
+  }
+}
+
 async function save(
   field: 'visible' | 'shareEntries',
   next: boolean,
@@ -100,6 +136,43 @@ async function signOut() {
           @update:model-value="saveEntries"
         />
       </div>
+    </UCard>
+
+    <UCard>
+      <h2 class="font-medium">
+        Who can book you into classes
+      </h2>
+      <p class="mt-1 text-sm text-muted">
+        Nobody, unless you say so. Anyone you allow can book you onto classes
+        and cancel what they booked — the bookings are made on your own BigBox
+        account, exactly as if you had made them. Turn it on beside a person's
+        name on the
+        <NuxtLink to="/people" class="text-primary underline underline-offset-2">
+          People
+        </NuxtLink>
+        page.
+      </p>
+
+      <ul v-if="canBookYou.length" class="mt-4 space-y-2">
+        <li
+          v-for="person in canBookYou"
+          :key="person.contactId"
+          class="flex items-center justify-between gap-3 rounded-lg border border-default px-3 py-2"
+        >
+          <span class="flex min-w-0 items-center gap-2">
+            <UIcon name="i-lucide-user-check" class="size-4 shrink-0 text-primary" />
+            <span class="truncate text-sm">{{ person.name }}</span>
+          </span>
+          <UButton
+            label="Remove"
+            color="neutral"
+            variant="outline"
+            size="xs"
+            :loading="revoking === person.contactId"
+            @click="revoke(person)"
+          />
+        </li>
+      </ul>
     </UCard>
 
     <UCard>

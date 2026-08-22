@@ -79,6 +79,17 @@ export interface Member {
   shareEntries: boolean
 
   /**
+   * Contact IRIs of the members allowed to book this member onto classes, and
+   * to undo it again.
+   *
+   * A list rather than a flag: "anyone signed into BigBuds may book me" is not
+   * a thing anyone wants, whereas "my wife may book me" is, and the difference
+   * is somebody else's Saturday morning. Empty by default, so the feature does
+   * not exist for a member until they name a person.
+   */
+  bookableBy: string[]
+
+  /**
    * Categories this member has hidden from their own timetable, by key.
    *
    * A display preference, not a privacy one — it changes what they see, never
@@ -185,6 +196,7 @@ function withDefaults(member: Member): Member {
     ...member,
     visible: member.visible ?? true,
     shareEntries: member.shareEntries ?? true,
+    bookableBy: member.bookableBy ?? [],
     hiddenCategories: member.hiddenCategories ?? [],
     hideFinished: member.hideFinished ?? false,
     bookings: member.bookings ?? [],

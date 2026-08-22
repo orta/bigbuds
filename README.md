@@ -43,6 +43,19 @@ tells you whether joining the list is worth it. Once you are on it, your place i
 context as `#2 of 6`. The club auto-promotes, so you move up without doing anything if a spot
 frees.
 
+**Booking each other in.** A member can name people who are allowed to book them onto classes —
+one partner, a training buddy, whoever they choose — from the switch beside that person's name on
+the People page. Those classes then carry a second control on the timetable: *Book Wanda in*,
+*Put Wanda on the list*, or *Cancel for Wanda* when she already has the place. The booking is made
+through her own BigBox account, by the same stored credentials the background sync uses, so the
+club sees a booking she made herself and it turns up in her own app.
+
+Nobody has this by default, and it is a list of named people rather than a switch, because "anyone
+signed into BigBuds may book me" is not something anyone wants. The grant is one-directional —
+letting your wife book you does not let you book her — it covers cancelling as well as booking, so
+a mistake can be undone by whoever made it, and it is withdrawn from either the People page or
+Settings, where everyone holding it is listed by name.
+
 **Everyone else.** Any other member signed into BigBuds shows up against the classes they are
 booked onto, as an avatar row on the timetable. Waiting-list places are shown dimmed, because
 they are not a promise to be there. Visibility is a single switch in Settings — on by default,

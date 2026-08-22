@@ -63,6 +63,9 @@ export default defineEventHandler(async event => {
         attendedCount: entry.activityId ? (member.attended[entry.activityId]?.count ?? 0) : 0,
         attendedLast: entry.activityId ? (member.attended[entry.activityId]?.lastAt ?? null) : null,
         going: [],
+        // Booking for other people happens on the timetable, where the whole
+        // day is in front of you; this page is your own classes.
+        bookedFor: [],
         // "Usually around" is a browsing aid for the timetable; on a class you
         // are already booked onto it answers a question nobody is asking.
         around: [],

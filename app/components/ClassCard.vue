@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ClassRow } from '#shared/types'
+import type { BookingBuddy, ClassRow } from '#shared/types'
 import { placesText, queuePositionText, timeRange } from '#shared/format'
 
 const props = defineProps<{
@@ -11,11 +11,21 @@ const props = defineProps<{
    * "usually here now" note beside each row would be noise.
    */
   showAround?: boolean
+  /**
+   * People who have asked this member to book for them. Empty for almost
+   * everyone, which is why it is a second control rather than a change to the
+   * one button the row already has.
+   */
+  bookFor?: BookingBuddy[]
 }>()
 
+/**
+ * A missing subject means the viewer themselves — the ordinary case, and the
+ * one the row's main button always emits.
+ */
 const emit = defineEmits<{
-  book: [entry: ClassRow]
-  cancel: [entry: ClassRow]
+  book: [entry: ClassRow, subject?: BookingBuddy]
+  cancel: [entry: ClassRow, subject?: BookingBuddy]
 }>()
 
 const when = computed(() => timeRange(props.entry.start, props.entry.durationMinutes))
@@ -63,6 +73,51 @@ const action = computed(() => {
     variant: 'solid' as const,
     event: 'book' as const,
   }
+})
+
+/**
+ * The same decision as `action`, once per person the viewer can book for.
+ *
+ * Someone already on the class gets the way back off it, and someone who
+ * cannot be fitted on stays in the menu saying so — dropping them would read
+ * as the feature being broken for that person rather than the class being
+ * full.
+ */
+const buddyItems = computed(() => {
+  const { entry } = props
+  const people = props.bookFor ?? []
+
+  if (!people.length || entry.isCancelled || entry.finished) return []
+
+  return [people.map(person => {
+    const held = entry.bookedFor.find(booked => booked.contactId === person.contactId)
+
+    if (held) {
+      return {
+        label: held.state === 'queued'
+          ? `Take ${person.name} off the list`
+          : `Cancel for ${person.name}`,
+        icon: 'i-lucide-user-minus',
+        onSelect: () => emit('cancel', entry, person),
+      }
+    }
+
+    if (entry.isFull && !entry.hasQueueSpace) {
+      return {
+        label: `No room for ${person.name}`,
+        icon: 'i-lucide-user-x',
+        disabled: true,
+      }
+    }
+
+    return {
+      label: entry.hasQueueSpace
+        ? `Put ${person.name} on the list`
+        : `Book ${person.name} in`,
+      icon: 'i-lucide-user-plus',
+      onSelect: () => emit('book', entry, person),
+    }
+  })]
 })
 
 const status = computed(() => {
@@ -193,6 +248,21 @@ const initials = (name: string) =>
           </div>
         </template>
       </UPopover>
+
+      <!-- Booking for someone who asked you to. Its own control rather than a
+           split button: the two act on different people, and a menu that can
+           change what the adjacent button does is how you book the wrong
+           person onto a 6am class. -->
+      <UDropdownMenu v-if="buddyItems.length" :items="buddyItems">
+        <UButton
+          icon="i-lucide-users-round"
+          :color="entry.bookedFor.length ? 'primary' : 'neutral'"
+          :variant="entry.bookedFor.length ? 'soft' : 'ghost'"
+          :loading="pending"
+          size="sm"
+          :aria-label="`Book someone else onto ${entry.name}`"
+        />
+      </UDropdownMenu>
 
       <UButton
         v-if="action"

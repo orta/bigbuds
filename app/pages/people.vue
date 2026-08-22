@@ -9,8 +9,61 @@ useHead({ title: 'People · BigBuds' })
 const today = clubToday()
 const tomorrow = addDays(today, 1)
 
-const { data, status } = await useFetch('/api/people')
+const toast = useToast()
+const { user, fetch: refreshSession } = useUserSession()
+
+const { data, status, refresh } = await useFetch('/api/people')
 const members = computed(() => data.value?.members ?? [])
+
+/**
+ * Who this member lets book for them, held locally so the switch moves at
+ * once. The session's copy is the truth, and is what a failed save reverts to.
+ */
+const granted = ref(new Set(user.value?.bookableBy ?? []))
+const saving = ref<string | null>(null)
+
+/**
+ * Grants or revokes one person's right to book this member onto classes.
+ *
+ * Sent as the whole list rather than as an add/remove, because that is what
+ * the settings endpoint stores and a diff would be a second way to describe
+ * the same thing.
+ */
+async function setCanBookYou(member: { contactId: string, name: string }, allowed: boolean) {
+  const before = new Set(granted.value)
+
+  if (allowed) granted.value.add(member.contactId)
+  else granted.value.delete(member.contactId)
+  triggerRef(granted)
+
+  saving.value = member.contactId
+  try {
+    await $fetch('/api/me', {
+      method: 'PATCH',
+      body: { bookableBy: [...granted.value] },
+    })
+    await Promise.all([refreshSession(), refresh()])
+    toast.add({
+      title: allowed
+        ? `${member.name} can now book you into classes`
+        : `${member.name} can no longer book you in`,
+      description: allowed
+        ? 'They can also cancel what they booked, and see what you are booked onto.'
+        : undefined,
+      icon: allowed ? 'i-lucide-user-check' : 'i-lucide-user-x',
+      color: 'neutral',
+    })
+  } catch {
+    granted.value = before
+    toast.add({
+      title: 'Could not change that',
+      color: 'error',
+      icon: 'i-lucide-alert-circle',
+    })
+  } finally {
+    saving.value = null
+  }
+}
 
 const initials = (name: string) =>
   name.split(/\s+/).slice(0, 2).map(part => part[0] ?? '').join('').toUpperCase()
@@ -42,7 +95,8 @@ function hoursLabel(visits: Visit[]) {
     </h1>
     <p class="mb-5 text-sm text-muted">
       Everyone using BigBuds who has left themselves visible. Their booked
-      classes show up against the timetable as you browse it.
+      classes show up against the timetable as you browse it, and you can let
+      any of them book classes for you.
     </p>
 
     <div v-if="status === 'pending'" class="space-y-2">
@@ -87,6 +141,31 @@ function hoursLabel(visits: Visit[]) {
             :label="`${member.upcoming} upcoming`"
             color="neutral"
             variant="subtle"
+          />
+        </div>
+
+        <!-- Booking for each other, which only exists once somebody says so. -->
+        <div v-if="!member.isYou" class="mt-3 flex items-center gap-3 border-t border-default pt-3">
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-medium">
+              Let {{ member.name.split(' ')[0] }} book me in
+            </p>
+            <p class="text-xs text-muted">
+              <template v-if="member.youCanBook">
+                They have let you book for them — their classes have a
+                <span class="font-medium">book for</span> menu on the timetable.
+              </template>
+              <template v-else>
+                They will be able to book and cancel classes on your BigBox
+                account.
+              </template>
+            </p>
+          </div>
+          <USwitch
+            :model-value="granted.has(member.contactId)"
+            :loading="saving === member.contactId"
+            :aria-label="`Let ${member.name} book you into classes`"
+            @update:model-value="allowed => setCanBookYou(member, allowed)"
           />
         </div>
 

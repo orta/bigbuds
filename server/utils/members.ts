@@ -14,7 +14,14 @@ import { toVisits, weekdayOf } from '#shared/visits'
 import { decrypt, encrypt } from './crypto'
 import type { Attendee } from './resamania'
 import { Client, classStart, isActive, isQueued } from './resamania'
-import { type Attended, type Member, readMember, readMembers, writeMember } from './store'
+import {
+  type Attended,
+  type Member,
+  type StoredBooking,
+  readMember,
+  readMembers,
+  writeMember,
+} from './store'
 
 /**
  * How much visit history to keep per member.
@@ -92,6 +99,7 @@ export async function signIn(email: string, password: string): Promise<Member> {
     // Settings a returning member has already chosen must survive a re-login.
     visible: current?.visible ?? true,
     shareEntries: current?.shareEntries ?? true,
+    bookableBy: current?.bookableBy ?? [],
     hiddenCategories: current?.hiddenCategories ?? [],
     hideFinished: current?.hideFinished ?? false,
     bookings: current?.bookings ?? [],
@@ -252,7 +260,9 @@ export async function recordSyncFailure(contactId: string, message: string) {
 /** Updates a member's sharing settings. */
 export function updateSettings(
   contactId: string,
-  settings: Partial<Pick<Member, 'visible' | 'shareEntries' | 'hiddenCategories' | 'hideFinished'>>,
+  settings: Partial<
+    Pick<Member, 'visible' | 'shareEntries' | 'bookableBy' | 'hiddenCategories' | 'hideFinished'>
+  >,
 ): Promise<Member> {
   return writeMember(contactId, current => {
     const next = { ...current!, ...settings, updatedAt: new Date().toISOString() }
@@ -261,6 +271,61 @@ export function updateSettings(
     if (settings.shareEntries === false) next.entries = []
     return next
   })
+}
+
+// --- Booking for each other ---
+
+/**
+ * Somebody the viewer may book onto classes.
+ *
+ * Names only in the direction that matters: this is the list of people who
+ * have granted the viewer something, never a list of people the viewer has
+ * granted, which is a different question with a different answer.
+ */
+export interface BookingBuddy {
+  contactId: string
+  name: string
+  /** Their last-synced bookings, so the UI can say what they already hold. */
+  bookings: StoredBooking[]
+}
+
+/**
+ * Whether `viewerContactId` may act on `member`'s bookings.
+ *
+ * Deliberately the only place the rule is written down, and deliberately not
+ * satisfied by the member themselves — booking for yourself goes down the
+ * ordinary path, and letting this return true for the viewer would mean a bug
+ * in the grant list could not be told apart from booking your own class.
+ */
+export function mayBookFor(
+  member: Pick<Member, 'contactId' | 'bookableBy'>,
+  viewerContactId: string,
+): boolean {
+  return member.contactId !== viewerContactId
+    && (member.bookableBy ?? []).includes(viewerContactId)
+}
+
+/**
+ * Who, out of `members`, has let the viewer book for them.
+ *
+ * Visibility is not consulted: hiding your classes from the timetable and
+ * asking someone to book them for you are separate choices, and a member who
+ * has made both still needs their buddy to be able to act.
+ */
+export function buddiesFor(members: Member[], viewerContactId: string): BookingBuddy[] {
+  return members
+    .filter(member => mayBookFor(member, viewerContactId))
+    .map(member => ({
+      contactId: member.contactId,
+      name: memberName(member),
+      bookings: member.bookings,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** The same, read from the store. */
+export async function bookingBuddies(viewerContactId: string): Promise<BookingBuddy[]> {
+  return buddiesFor(await readMembers(), viewerContactId)
 }
 
 // --- The shared view ---
@@ -379,13 +444,20 @@ export interface MemberSummary {
   next: string | null
   /** Recent gym visits, newest first. Empty when they do not share them. */
   visits: Visit[]
+  /** Whether this member has let the viewer book them onto classes. */
+  youCanBook: boolean
+  /** Whether the viewer has let *them* do the same. */
+  canBookYou: boolean
 }
 
 /** Every visible member, for the People page. */
 export async function memberSummaries(viewerContactId: string): Promise<MemberSummary[]> {
   const floor = `${today()}T00:00:00`
+  const members = await readMembers()
+  const granted = new Set(
+    members.find(member => member.contactId === viewerContactId)?.bookableBy ?? [])
 
-  const summaries = (await readMembers())
+  const summaries = members
     .filter(member => member.visible)
     .map(member => {
       const upcoming = member.bookings
@@ -399,10 +471,31 @@ export async function memberSummaries(viewerContactId: string): Promise<MemberSu
         upcoming: upcoming.length,
         next: upcoming[0]?.startedAt ?? null,
         visits: member.shareEntries ? toVisits(member.entries) : [],
+        youCanBook: mayBookFor(member, viewerContactId),
+        canBookYou: granted.has(member.contactId),
       }
     })
 
   return summaries.sort((a, b) => b.upcoming - a.upcoming || a.name.localeCompare(b.name))
+}
+
+/**
+ * The people the viewer has let book for them, named.
+ *
+ * Unlike `memberSummaries` this does not filter on visibility: the viewer
+ * granted these people themselves, so they already know who they are, and
+ * dropping one who has since hidden their classes would leave a permission
+ * that could be neither seen nor revoked.
+ */
+export async function whoCanBookYou(viewerContactId: string): Promise<{ contactId: string, name: string }[]> {
+  const members = await readMembers()
+  const granted = new Set(
+    members.find(member => member.contactId === viewerContactId)?.bookableBy ?? [])
+
+  return members
+    .filter(member => granted.has(member.contactId))
+    .map(member => ({ contactId: member.contactId, name: memberName(member) }))
+    .sort((a, b) => a.name.localeCompare(b.name))
 }
 
 export type { Member }

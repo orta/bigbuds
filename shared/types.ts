@@ -17,7 +17,18 @@ export interface AlsoGoing {
   state: string
 }
 
-/** One class on the timetable, resolved and merged with who else is going. */
+/** Somebody the viewer may book onto classes, because they asked. */
+export interface BookingBuddy {
+  contactId: string
+  name: string
+}
+
+/** One of those people, already holding a place at a particular class. */
+export interface BookedFor extends BookingBuddy {
+  /** `booked` or `queued`. */
+  state: string
+}
+
 /** Somebody whose gym visits suggest they are usually here around now. */
 export interface AroundMember {
   contactId: string
@@ -68,6 +79,15 @@ export interface ClassRow {
 
   going: AlsoGoing[]
 
+  /**
+   * Which of the people the viewer can book for are already on this class.
+   *
+   * Separate from `going`, which is about who the viewer can *see*: these two
+   * lists overlap for a visible buddy and diverge for a hidden one, and only
+   * this one decides whether the row offers to book them or to cancel.
+   */
+  bookedFor: BookedFor[]
+
   /** How many times the viewer has been to this class type before. */
   attendedCount: number
   /** Naive start of the last time they went, when they have. */
@@ -89,4 +109,8 @@ export interface MemberRow {
   upcoming: number
   /** Naive start of their next class, if any. */
   next: string | null
+  /** Whether they have let the viewer book them onto classes. */
+  youCanBook: boolean
+  /** Whether the viewer has let them do the same. */
+  canBookYou: boolean
 }

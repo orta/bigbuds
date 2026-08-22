@@ -7,7 +7,7 @@
  */
 
 import type { H3Event } from 'h3'
-import { findMember, memberName } from './members'
+import { findMember, mayBookFor, memberName } from './members'
 import type { Member } from './store'
 
 /**
@@ -29,6 +29,36 @@ export async function requireMember(event: H3Event): Promise<Member> {
   return member
 }
 
+/**
+ * The member a booking action is *for*.
+ *
+ * Normally the signed-in member. When `forContactId` names somebody else, they
+ * must have granted this viewer the right to book for them — which is checked
+ * here, against the store, on every request, rather than being inferred from
+ * the browser having offered the option.
+ *
+ * The two failure modes answer the same way on purpose: "no such member" and
+ * "that member has not allowed you" are one message, so this cannot be used to
+ * find out who has signed up.
+ */
+export async function requireSubject(
+  viewer: Member,
+  forContactId?: string,
+): Promise<Member> {
+  if (!forContactId || forContactId === viewer.contactId) return viewer
+
+  const subject = await findMember(forContactId)
+
+  if (!subject || !mayBookFor(subject, viewer.contactId)) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'They have not asked you to book for them.',
+    })
+  }
+
+  return subject
+}
+
 /** The subset of a member that is safe to put in a cookie and send to the browser. */
 export function sessionUser(member: Member) {
   return {
@@ -39,6 +69,7 @@ export function sessionUser(member: Member) {
     membershipNumber: member.membershipNumber,
     visible: member.visible,
     shareEntries: member.shareEntries,
+    bookableBy: member.bookableBy,
     hiddenCategories: member.hiddenCategories,
     hideFinished: member.hideFinished,
   }

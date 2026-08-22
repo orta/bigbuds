@@ -3,7 +3,7 @@ import { CATEGORIES, CATEGORY_ORDER, matchesQuery, type Category } from '#shared
 import { relativeDayLabel, dayLabel } from '#shared/format'
 import { bookableDays, lastBookableDate } from '#shared/booking'
 import { addDays, today as clubToday } from '#shared/naive'
-import type { ClassRow } from '#shared/types'
+import type { BookingBuddy, ClassRow } from '#shared/types'
 
 useHead({ title: 'Timetable · BigBuds' })
 
@@ -98,6 +98,12 @@ const { data, status, refresh } = await useFetch('/api/planning', {
 const entries = computed<ClassRow[]>(() => (data.value?.entries ?? []) as ClassRow[])
 
 /**
+ * The people who have asked this member to book for them. Almost always
+ * empty, and the timetable is unchanged when it is.
+ */
+const bookFor = computed<BookingBuddy[]>(() => data.value?.bookFor ?? [])
+
+/**
  * The single filtered list both views render from.
  *
  * Deliberately one computed rather than one per view: the hidden categories
@@ -131,12 +137,20 @@ const bookedCount = computed(() =>
 /** The class currently being booked or cancelled, so only its button spins. */
 const pendingId = ref<string | null>(null)
 
-async function book(entry: ClassRow) {
+/**
+ * Books a class. `subject` is somebody who has asked this member to book for
+ * them; without it the booking is the member's own.
+ *
+ * Every message names who it was for when it was not the member, because
+ * "Booked" on a screen where you can act for two people says the wrong thing
+ * half the time.
+ */
+async function book(entry: ClassRow, subject?: BookingBuddy) {
   pendingId.value = entry.id
   try {
     const result = await $fetch('/api/classes/book', {
       method: 'POST',
-      body: { classEventId: entry.id },
+      body: { classEventId: entry.id, forContactId: subject?.contactId },
     })
 
     // Booking and joining the waiting list are the same request; the server
@@ -144,14 +158,20 @@ async function book(entry: ClassRow) {
     toast.add(
       result.queued
         ? {
-            title: `On the waiting list for ${entry.name}`,
+            title: subject
+              ? `${subject.name} is on the waiting list for ${entry.name}`
+              : `On the waiting list for ${entry.name}`,
             description: 'The club promotes automatically if a place frees up.',
             color: 'warning',
             icon: 'i-lucide-hourglass',
           }
         : {
-            title: `Booked ${entry.name}`,
-            description: 'Other members can see you are going.',
+            title: subject
+              ? `Booked ${subject.name} onto ${entry.name}`
+              : `Booked ${entry.name}`,
+            description: subject
+              ? 'It is on their BigBox account, so they will see it there too.'
+              : 'Other members can see you are going.',
             color: 'success',
             icon: 'i-lucide-check',
           },
@@ -159,7 +179,7 @@ async function book(entry: ClassRow) {
     await refresh()
   } catch (error) {
     toast.add({
-      title: 'Could not book that class',
+      title: subject ? `Could not book ${subject.name} in` : 'Could not book that class',
       description: describe(error),
       color: 'error',
       icon: 'i-lucide-alert-circle',
@@ -169,24 +189,32 @@ async function book(entry: ClassRow) {
   }
 }
 
-async function cancel(entry: ClassRow) {
-  if (!entry.attendeeId) return
+async function cancel(entry: ClassRow, subject?: BookingBuddy) {
+  // The viewer's own attendee IRI is on the row; somebody else's is not ours
+  // to know, so those cancellations name the class and let the server find it.
+  if (!subject && !entry.attendeeId) return
 
   pendingId.value = entry.id
   try {
     await $fetch('/api/classes/cancel', {
       method: 'POST',
-      body: { attendeeId: entry.attendeeId },
+      body: subject
+        ? { classEventId: entry.id, forContactId: subject.contactId }
+        : { attendeeId: entry.attendeeId },
     })
     toast.add({
-      title: `Cancelled ${entry.name}`,
+      title: subject
+        ? `Cancelled ${entry.name} for ${subject.name}`
+        : `Cancelled ${entry.name}`,
       color: 'neutral',
       icon: 'i-lucide-x',
     })
     await refresh()
   } catch (error) {
     toast.add({
-      title: 'Could not cancel that booking',
+      title: subject
+        ? `Could not cancel that for ${subject.name}`
+        : 'Could not cancel that booking',
       description: describe(error),
       color: 'error',
       icon: 'i-lucide-alert-circle',
@@ -315,6 +343,7 @@ const describe = (error: unknown) =>
             :key="entry.id"
             :entry="entry"
             :pending="pendingId === entry.id"
+            :book-for="bookFor"
             @book="book"
             @cancel="cancel"
           />
@@ -328,6 +357,7 @@ const describe = (error: unknown) =>
         :key="entry.id"
         :entry="entry"
         :pending="pendingId === entry.id"
+        :book-for="bookFor"
         show-around
         @book="book"
         @cancel="cancel"

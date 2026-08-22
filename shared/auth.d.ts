@@ -15,6 +15,8 @@ declare module '#auth-utils' {
     membershipNumber: string
     visible: boolean
     shareEntries: boolean
+    /** Contact IRIs of the members allowed to book this member onto classes. */
+    bookableBy: string[]
     /** Category keys hidden from this member's own timetable. */
     hiddenCategories: string[]
     /** Whether classes that have already started are dropped from the timetable. */

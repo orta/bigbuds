@@ -9,7 +9,7 @@
 import { CATEGORIES, lookupClass } from '#shared/categories'
 import { addDays, naiveNow, today } from '#shared/naive'
 import type { ClassRow } from '#shared/types'
-import { alsoGoing, clientFor, isAround, regularsOn } from '../utils/members'
+import { alsoGoing, bookingBuddies, clientFor, isAround, regularsOn } from '../utils/members'
 import { getDirectory, getPlanning } from '../utils/planning'
 import { resolve } from '../utils/resamania'
 import { requireMember } from '../utils/session'
@@ -27,11 +27,13 @@ export default defineEventHandler(async event => {
   const from = date ?? today()
   const client = await clientFor(member)
 
-  const [directory, events, regulars] = await Promise.all([
+  const [directory, events, regulars, buddies] = await Promise.all([
     getDirectory(client),
     // `to` is exclusive, so this is exactly one day.
     getPlanning(client, member.clubId, from, addDays(from, 1)),
     regularsOn(from, member.contactId),
+    // The people who have asked this member to book for them.
+    bookingBuddies(member.contactId),
   ])
 
   const now = naiveNow()
@@ -58,6 +60,25 @@ export default defineEventHandler(async event => {
       around: entry.start
         ? regulars.filter(regular => isAround(regular, entry.start!))
         : [],
+      /**
+       * Which of those people already hold a place here.
+       *
+       * From the snapshot rather than live: fetching each buddy's bookings on
+       * every timetable load would be a round trip per person per day. It can
+       * therefore lag a booking made in the club's own app by up to a sync,
+       * which costs a refused request and a toast — where being *silent* about
+       * it would cost a double booking.
+       *
+       * Note this ignores `visible`: someone who has hidden their classes but
+       * asked you to book for them still has to be told what they are booked
+       * onto, or the offer is unusable.
+       */
+      bookedFor: buddies.flatMap(buddy => {
+        const booking = buddy.bookings.find(held => held.classEventId === entry.id)
+        return booking
+          ? [{ contactId: buddy.contactId, name: buddy.name, state: booking.state }]
+          : []
+      }),
     }
   })
 
@@ -68,6 +89,8 @@ export default defineEventHandler(async event => {
     date: from,
     now,
     club: entries.find(entry => entry.club)?.club ?? null,
+    /** Who this member may book in, alongside themselves. */
+    bookFor: buddies.map(({ contactId, name }) => ({ contactId, name })),
     entries,
   }
 })
