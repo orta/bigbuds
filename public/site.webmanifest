@@ -1,0 +1,34 @@
+{
+  "id": "/",
+  "name": "BigBuds",
+  "short_name": "BigBuds",
+  "description": "Book BigBox classes, and see which of your gym buddies are going.",
+  "lang": "en-GB",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "categories": ["health", "fitness", "lifestyle"],
+  "icons": [
+    { "src": "/icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "My classes",
+      "short_name": "Classes",
+      "description": "The classes you are booked onto",
+      "url": "/bookings"
+    },
+    {
+      "name": "People",
+      "short_name": "People",
+      "description": "Everyone else using BigBuds",
+      "url": "/people"
+    }
+  ]
+}

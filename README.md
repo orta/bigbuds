@@ -223,6 +223,33 @@ each class's own description in the API and covering all 66 classes the club cur
 If the club adds a class that is not in that table, it falls back to keyword matching on the name,
 so new classes still land somewhere sensible rather than disappearing.
 
+## App icon and metadata
+
+The mark is Lucide's `boxes` — the same glyph the header uses as the logo, so the tab icon and the
+thing at the top of the page are one drawing rather than two that resemble each other — in
+lime-500 on the app's near-black, with the corner radius plates iOS and Android expect.
+
+[`scripts/generate-icons.mjs`](./scripts/generate-icons.mjs) draws all of it and writes the
+outputs into `public/`; `yarn icons` regenerates them. They are committed, so nothing runs this at
+build or deploy time. Two decisions in there are worth knowing about:
+
+- **Small sizes are a different drawing.** Three cubes at 16px is five pixels per cube and renders
+  as a green blob, so the 16px and 32px entries in `favicon.ico` carry a single cube instead, and
+  the 16px one is a filled silhouette because line art that thin closes up. Each size is
+  rasterised at its own size rather than resampled down from a 512px master, which is the
+  difference between landing on the pixel grid and not.
+- **`favicon.ico` is written by hand.** `sharp` does not encode ICO, and the format is simple
+  enough to emit directly: a header, a directory entry per image, then — since Vista — the images
+  as whole PNGs.
+
+`public/site.webmanifest` makes it installable: standalone display, the club's colours for the
+splash, a maskable icon for Android launchers, and shortcuts straight to *My classes* and
+*People*. `nuxt.config.ts` carries the head links, a `theme-color` per colour scheme so the
+browser chrome matches the page, and the Open Graph tags — the way anybody joins BigBuds is a
+member sending them the link, so the link is worth a card. Its absolute URLs come from the request
+in `app/app.vue` rather than a configured domain, which would be wrong the first time the
+deployment moved.
+
 ## Running it locally
 
 Needs Node 22+. No database.
