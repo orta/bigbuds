@@ -240,14 +240,20 @@ async function signOut() {
       <div class="flex items-start justify-between gap-4">
         <div>
           <h2 class="font-medium">
-            Tell me when I get off a waiting list
+            Tell me when a class changes without me
           </h2>
           <p class="mt-1 text-sm text-muted">
-            The club promotes people off its waiting lists automatically and
-            tells nobody, so the only way to find out is to look. BigBuds
-            checks every fifteen minutes and can send you a notification the
-            moment a place becomes yours. It is the only thing it will ever
-            send you.
+            Two things, and only these two. When the club moves you off a
+            waiting list and onto a class — it does that automatically and
+            tells nobody, so the only other way to find out is to look; BigBuds
+            checks every fifteen minutes. And when somebody you have allowed
+            books you into a class or cancels one for you, because a class
+            appearing or disappearing in your name is not something to discover
+            by turning up.
+          </p>
+          <p class="mt-2 text-sm text-muted">
+            Nothing else is ever sent. You will not be told that a friend
+            booked something, or reminded about a class you booked yourself.
           </p>
 
           <p v-if="!push.configured.value" class="mt-2 text-sm text-warning">

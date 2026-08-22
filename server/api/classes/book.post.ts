@@ -14,8 +14,9 @@
 
 import { z } from 'zod'
 import { clientFor, memberName, syncMember } from '../../utils/members'
-import { isQueued } from '../../utils/resamania'
-import { invalidatePlanning } from '../../utils/planning'
+import { announce } from '../../utils/notices'
+import { activityName, classStart, isQueued } from '../../utils/resamania'
+import { getDirectory, invalidatePlanning } from '../../utils/planning'
 import { requireMember, requireSubject } from '../../utils/session'
 
 const Body = z.object({
@@ -38,6 +39,32 @@ export default defineEventHandler(async event => {
     // members seeing it, and the scheduled sync will pick it up.
     console.error('Post-booking sync failed', error)
   })
+
+  /**
+   * Somebody else's class, in somebody else's name. They have to be told.
+   *
+   * The grant makes this allowed, not expected — a member who said yes to
+   * their partner booking for them did not thereby agree to find out about a
+   * 06:30 by looking. `announce` swallows its own failures, because the
+   * booking has already happened at the club and reporting it as failed is
+   * how somebody books it a second time.
+   */
+  if (subject.contactId !== member.contactId) {
+    const classEvent = attendee.classEvent
+    const start = classEvent ? classStart(classEvent) : null
+
+    if (classEvent && start) {
+      await announce(subject.contactId, {
+        kind: 'booked-for-you',
+        classEventId: classEvent['@id'],
+        name: activityName(await getDirectory(client), classEvent) ?? 'a class',
+        startedAt: start,
+        by: memberName(member),
+        noticedAt: new Date().toISOString(),
+        seen: false,
+      })
+    }
+  }
 
   return {
     attendeeId: attendee['@id'],

@@ -9,7 +9,8 @@
  */
 
 import { naiveNow, naiveTime, parseNaive, today } from '#shared/naive'
-import type { Promotion } from '#shared/promotions'
+import type { Notice } from '#shared/notices'
+import { currentNotices, withNotice } from '#shared/notices'
 import { BOOKED, QUEUED, detectPromotions } from '#shared/promotions'
 import type { Visit } from '#shared/visits'
 import { toVisits, weekdayOf } from '#shared/visits'
@@ -30,7 +31,6 @@ import {
   type Attended,
   type Member,
   type StoredBooking,
-  type StoredPromotion,
   readMember,
   readMembers,
   writeMember,
@@ -125,7 +125,7 @@ export async function signIn(email: string, password: string): Promise<Member> {
     // notifications off on.
     calendarToken: current?.calendarToken ?? null,
     pushSubscriptions: current?.pushSubscriptions ?? [],
-    promotions: current?.promotions ?? [],
+    notices: current?.notices ?? [],
     createdAt: current?.createdAt ?? now,
 
     contactId: profile.contactId,
@@ -162,7 +162,7 @@ export const findMember = readMember
  */
 export async function syncMember(
   member: Member,
-): Promise<{ bookings: number, entries: number, promotions: Promotion[] }> {
+): Promise<{ bookings: number, entries: number, notices: Notice[] }> {
   const client = await clientFor(member)
   const from = today()
 
@@ -216,12 +216,18 @@ export async function syncMember(
    * now may be a sync or a booking out of date, and would re-announce a
    * promotion that was already announced.
    */
-  let promotions: Promotion[] = []
+  let noticed: Notice[] = []
 
   const saved = await writeMember(member.contactId, current => {
     const base = current ?? member
+    const at = naiveNow()
 
-    promotions = detectPromotions(base.bookings ?? [], bookings, naiveNow())
+    noticed = detectPromotions(base.bookings ?? [], bookings, at).map(promotion => ({
+      ...promotion,
+      kind: 'promoted' as const,
+      noticedAt: new Date().toISOString(),
+      seen: false,
+    }))
 
     // Merge by entry IRI: the API's window overlaps what we already hold, and
     // re-adding the same scan every fifteen minutes would multiply it.
@@ -238,14 +244,11 @@ export async function syncMember(
       entries: base.shareEntries
         ? [...merged.values()].filter(entry => entry.at >= cutoff).sort((a, b) => a.at.localeCompare(b.at))
         : [],
-      promotions: keepCurrent([
-        ...base.promotions,
-        ...promotions.map(promotion => ({
-          ...promotion,
-          noticedAt: new Date().toISOString(),
-          seen: false,
-        })),
-      ]),
+      // Recorded here rather than by the caller: this write already holds the
+      // comparison that produced them, and doing it in a second write would
+      // leave a window where a promotion was detected and never stored.
+      notices: noticed.reduce((held, notice) => withNotice(held, notice, at),
+        currentNotices(base.notices, at)),
       syncError: null,
       lastSyncedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -255,28 +258,39 @@ export async function syncMember(
   return {
     bookings: saved.bookings.length,
     entries: saved.entries.length,
-    promotions,
+    notices: noticed,
   }
 }
 
 /**
- * Drops promotions whose class has been and gone.
+ * Records something done to a member's bookings by somebody else.
  *
- * A promotion is news about a class you are about to go to, so it stops being
- * anything once the class starts — seen or not. That is also what keeps the
- * list from growing without bound, which matters because it lives in a file
- * that is read into memory whole.
+ * The other way a notice arrives. Unlike a promotion there is nothing to
+ * detect — the request that did it is right here — so this is a plain write,
+ * and it is the *subject's* record that changes rather than the actor's.
  */
-function keepCurrent(promotions: StoredPromotion[]): StoredPromotion[] {
-  const now = naiveNow()
-  return promotions.filter(promotion => promotion.startedAt >= now)
-}
-
-/** Marks every promotion the member is currently being shown as seen. */
-export function markPromotionsSeen(contactId: string): Promise<Member> {
+export function recordNotice(contactId: string, notice: Notice): Promise<Member> {
   return writeMember(contactId, current => ({
     ...current!,
-    promotions: current!.promotions.map(promotion => ({ ...promotion, seen: true })),
+    notices: withNotice(current!.notices, notice, naiveNow()),
+    updatedAt: new Date().toISOString(),
+  }))
+}
+
+/**
+ * Marks notices seen — one class's, or all of them.
+ *
+ * Per class because the banner shows one line per notice with its own dismiss:
+ * clearing "Sam booked you into Body Pump" should not also clear "you are off
+ * the waiting list for Reformer" sitting underneath it.
+ */
+export function markNoticesSeen(contactId: string, classEventId?: string): Promise<Member> {
+  return writeMember(contactId, current => ({
+    ...current!,
+    notices: current!.notices.map(notice =>
+      !classEventId || notice.classEventId === classEventId
+        ? { ...notice, seen: true }
+        : notice),
     updatedAt: new Date().toISOString(),
   }))
 }

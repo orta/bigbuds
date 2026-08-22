@@ -7,10 +7,8 @@
  * gets built, since the club's API only offers a short window of recent scans.
  */
 
-import { addDays, naiveDate, today } from '#shared/naive'
-import { whenLabel } from '#shared/format'
 import { forgetClient, recordSyncFailure, syncMember } from './members'
-import { notify } from './push'
+import { deliver } from './notices'
 import { readMember, readMembers } from './store'
 import { ApiError } from './resamania'
 
@@ -33,42 +31,36 @@ export async function syncAllMembers(): Promise<SyncReport> {
     errors: [],
   }
 
-  const clubToday = today()
-  const clubTomorrow = addDays(clubToday, 1)
-
   // Sequential on purpose. This is the club's API, not ours, and a handful of
   // members every quarter of an hour is not worth a burst of parallel logins.
   for (const member of everyone) {
     try {
-      const { promotions } = await syncMember(member)
+      const { notices } = await syncMember(member)
       report.synced += 1
-      report.promoted += promotions.length
+      report.promoted += notices.length
 
       /**
-       * The only notification this app sends, and only from here.
+       * Promotions are announced from here and nowhere else.
        *
-       * `syncMember` also runs on sign-in and straight after a booking, and a
-       * promotion detected on either of those paths is one the member is
-       * already looking at — the page they are on is about to show it. This is
-       * the path where nobody is looking, which is the whole reason to
-       * interrupt them.
+       * `syncMember` also runs on sign-in and straight after a booking, and it
+       * records what it finds on every one of those paths — but a promotion
+       * detected while the member is signing in is one they are about to see
+       * on the page they are opening. This is the path where nobody is
+       * looking, which is the whole reason to interrupt them.
+       *
+       * The other kinds of notice do not come through here at all: being
+       * booked in by somebody is announced by the endpoint that did it, which
+       * has no diffing to do.
        *
        * Re-read rather than reusing the record from the top of the loop: a run
        * over every member takes a while, and a device that subscribed during
        * it should still be told.
        */
-      for (const promotion of promotions) {
+      for (const notice of notices) {
         const fresh = await readMember(member.contactId)
         if (!fresh) continue
 
-        await notify(fresh, {
-          title: `You are in — ${promotion.name}`,
-          body: `A place came up for ${whenLabel(promotion.startedAt, clubToday, clubTomorrow)}.`,
-          // One per class: two syncs noticing the same promotion replace each
-          // other on the lock screen rather than stacking.
-          tag: `promotion:${promotion.classEventId}`,
-          url: `/bookings#${naiveDate(promotion.startedAt)}`,
-        })
+        await deliver(fresh, notice)
       }
     } catch (error) {
       report.failed += 1

@@ -10,9 +10,10 @@
 
 import { z } from 'zod'
 import { clientFor, memberName, syncMember } from '../../utils/members'
+import { announce } from '../../utils/notices'
 import { today } from '#shared/naive'
-import { invalidatePlanning } from '../../utils/planning'
-import { isActive } from '../../utils/resamania'
+import { getDirectory, invalidatePlanning } from '../../utils/planning'
+import { activityName, classStart, isActive } from '../../utils/resamania'
 import { requireMember, requireSubject } from '../../utils/session'
 
 const Body = z.object({
@@ -50,12 +51,37 @@ export default defineEventHandler(async event => {
     })
   }
 
+  // Read before cancelling it away: afterwards the booking is gone from the
+  // member's own list and there is nothing left to name the class from.
+  const classEvent = booking.classEvent
+  const start = classEvent ? classStart(classEvent) : null
+  const name = classEvent
+    ? activityName(await getDirectory(client), classEvent) ?? 'a class'
+    : 'a class'
+
   await client.cancel(booking['@id'])
 
   invalidatePlanning()
   await syncMember(subject).catch(error => {
     console.error('Post-cancellation sync failed', error)
   })
+
+  /**
+   * The mirror of booking for somebody. Arguably the more important half: a
+   * class quietly disappearing from your schedule is worse than one quietly
+   * appearing, because you find out by not going.
+   */
+  if (subject.contactId !== member.contactId && classEvent && start) {
+    await announce(subject.contactId, {
+      kind: 'cancelled-for-you',
+      classEventId: classEvent['@id'],
+      name,
+      startedAt: start,
+      by: memberName(member),
+      noticedAt: new Date().toISOString(),
+      seen: false,
+    })
+  }
 
   return { ok: true, forContactId: subject.contactId, forName: memberName(subject) }
 })

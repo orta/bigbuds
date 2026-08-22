@@ -60,8 +60,13 @@ wants to know — *you are in* — is the one thing they can only find out by op
 looking. BigBuds is already signing in as everybody every fifteen minutes, and already working out
 each booking's state in order to store it, so noticing costs nothing: a place that was `queued`
 last time and is `booked` now is a promotion. It arrives as a push notification if the member has
-turned them on, and as a banner in the app if they have not — see [Being told you are
-in](#being-told-you-are-in).
+turned them on, and as a banner in the app if they have not — see [Notices](#notices).
+
+**And when somebody else books you.** The same two channels for the other thing that happens to a
+member's schedule without them: being put into a class, or taken out of one, by somebody they gave
+that right to. Allowing your partner to book for you is not the same as agreeing to find out about
+a 06:30 by looking, and a class quietly *disappearing* is worse still, because you find out by not
+going.
 
 **Your classes in your calendar.** A private, subscribable link that puts what you have booked
 alongside everything else you have on. It keeps itself current: bookings made in the club's own
@@ -97,7 +102,7 @@ BigBox is the source of truth for the timetable and for who is booked onto what.
 store holds only the things the club's API has no concept of: that a member has joined *this*
 app, a snapshot of their upcoming bookings, a rolling week of their gym visits, and the handful of
 things members have added themselves — their notes, their calendar link, the devices they want
-notifying, and the waiting-list promotions they have not yet acknowledged.
+notifying, and the notices they have not yet acknowledged.
 
 Members' bookings are refreshed three ways, so the shared view stays close to live:
 
@@ -288,7 +293,7 @@ of one produces mojibake. There are tests pinning that, and pinning that a real 
 description becomes the two characters `\n` — a literal one would start a new property and
 silently truncate the rest of the member's calendar.
 
-## Being told you are in
+## Notices
 
 The club promotes off its waiting lists automatically and tells nobody, which makes it the single
 thing this app is best placed to say. [`shared/promotions.ts`](./shared/promotions.ts) is the
@@ -319,7 +324,41 @@ It is announced twice, and both halves matter:
   exists to give them. The record is dropped once the class starts, seen or not, which is also
   what stops the list growing without a bound anyone chose.
 
-Notifications are the one thing this app will ever send, and the settings copy says so.
+### The other two kinds
+
+[`shared/notices.ts`](./shared/notices.ts) is the closed list, and it is closed on purpose: every
+one of these interrupts somebody, so adding a kind should mean writing the sentence in that file
+and arguing that it earns the interruption.
+
+Alongside `promoted` there are `booked-for-you` and `cancelled-for-you`, which arrive from the
+opposite direction. There is nothing to detect — the request that did it is right there in
+[`book.post.ts`](./server/api/classes/book.post.ts) — so the endpoint records and sends the notice
+itself rather than waiting for a sync to notice. They fire only when the subject is not the person
+making the request; booking your own class is not news.
+
+Two details:
+
+- **At most one notice per class, newest winning.** Somebody booking a member in and thinking
+  better of it two minutes later would otherwise leave both sentences on screen at once — *"Sam
+  booked you into Body Pump"* directly above *"Sam cancelled Body Pump for you"* — which is a
+  banner arguing with itself about whether the member has a class.
+- **Announcing never fails the request.** By the time the notice is written the class has already
+  been booked or cancelled at the club. Reporting that as failed because a push service was slow
+  is how somebody books the same class twice.
+
+`promoted` is the one kind with nobody's name on it. The club's automation is not a person, and
+saying "the club booked you in" would suggest somebody there made a decision about this member.
+
+The settings copy names both things and says nothing else is ever sent — no "a friend booked
+something", no reminders about classes you booked yourself. That promise is the feature; keeping
+it is what stops the switch being turned off.
+
+### Migrating the record
+
+Notices shipped first as a `promotions` array holding only promotions, so there are member files
+carrying it. There are no migrations in this project — the store fills in fields as it loads — so
+the conversion lives in `noticesFrom`, which is pure and pinned by tests rather than hoped about.
+A member promoted before the upgrade keeps the notice.
 
 ### Why `web-push` is a dependency
 
@@ -426,7 +465,8 @@ Sign in with a real BigBox membership — there is no separate registration, bec
 The tests cover the category table, search matching, the capacity and booking-state logic in the
 API client, the wall-clock arithmetic across both DST transitions, grouping badge scans into
 visits — pinned against scans the club actually produced — which snapshot transitions count as a
-waiting-list promotion, and the iCalendar output, down to the octet-counted line folding and the
+waiting-list promotion, how notices collapse and expire, the wording of each kind, the conversion
+of records written before notices had kinds, and the iCalendar output, down to the octet-counted line folding and the
 escaping that stops a newline in a note truncating somebody's calendar. They are all pure
 functions — nothing in the suite talks to BigBox.
 
@@ -454,7 +494,7 @@ builds identically on a laptop.
    | `NUXT_SESSION_PASSWORD` | seals the session cookie |
    | `BIGBUDS_ENCRYPTION_KEY` | encrypts stored passwords — **back this up**, losing it signs everyone out permanently |
    | `BIGBUDS_SYNC_TOKEN` | optional; only if driving the sync externally |
-   | `BIGBUDS_VAPID_PUBLIC_KEY` | optional; `yarn vapid` generates the pair. Without them the app still notices a promotion and shows it in-app — only the notification is missing |
+   | `BIGBUDS_VAPID_PUBLIC_KEY` | optional; `yarn vapid` generates the pair. Without them the app still records every notice and shows it in-app — only the notification is missing |
    | `BIGBUDS_VAPID_PRIVATE_KEY` | the other half. Changing either invalidates every subscription, and members have to turn notifications on again |
    | `BIGBUDS_VAPID_SUBJECT` | optional; a `mailto:` for a push service with a complaint about this app |
 

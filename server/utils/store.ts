@@ -24,6 +24,9 @@
  * at once. `railway.json` pins one replica for that reason.
  */
 
+import type { Notice } from '#shared/notices'
+import { currentNotices, noticesFrom } from '#shared/notices'
+import { naiveNow } from '#shared/naive'
 import { timingSafeEqual } from 'node:crypto'
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -83,26 +86,19 @@ export interface StoredPushSubscription {
 }
 
 /**
- * A waiting-list place that turned into a real one.
+ * Something that happened to this member's bookings without them doing it.
  *
  * Recorded as well as pushed, for two reasons. Push is best-effort — it needs
  * permission, it needs the app installed to the home screen on iOS, and the
  * message can simply not arrive — so a member who never turns it on would
- * otherwise get nothing at all from the one piece of news the app is best
- * placed to give them. And a notification is gone the moment it is swiped
- * away, whereas this survives until they have actually looked.
+ * otherwise get nothing at all from the news the app is best placed to give
+ * them. And a notification is gone the moment it is swiped away, whereas this
+ * survives until they have actually looked.
+ *
+ * The shape lives in `#shared/notices` because the browser renders these and
+ * needs the same definition.
  */
-export interface StoredPromotion {
-  classEventId: string
-  /** The class's name at the time, so the record reads on its own later. */
-  name: string
-  /** Naive start of the class. */
-  startedAt: string
-  /** ISO instant the promotion was noticed — not when the club made it. */
-  noticedAt: string
-  /** Cleared once the member has seen it in the app. */
-  seen: boolean
-}
+export type StoredNotice = Notice
 
 /**
  * A class type the member has been to before, keyed by activity IRI.
@@ -193,8 +189,8 @@ export interface Member {
   /** Devices that have agreed to receive notifications. Empty for most. */
   pushSubscriptions: StoredPushSubscription[]
 
-  /** Waiting-list promotions noticed by the sync, newest last. */
-  promotions: StoredPromotion[]
+  /** Things done to their bookings by the club or by somebody they allowed. */
+  notices: StoredNotice[]
 
   /**
    * Set when the background sync could not sign in — almost always because
@@ -289,8 +285,16 @@ async function load(): Promise<void> {
  * have a sensible value for records that predate it.
  */
 function withDefaults(member: Member): Member {
+  /**
+   * `promotions` is what `notices` was called before they had kinds.
+   * `noticesFrom` reads it, and dropping it here is what stops a field nothing
+   * refers to sitting in every member's file forever — and, worse, sitting
+   * there as a second, stale copy of the notices somebody might later read.
+   */
+  const { promotions: _legacy, ...current } = member as Member & { promotions?: unknown }
+
   return {
-    ...member,
+    ...current,
     visible: member.visible ?? true,
     shareEntries: member.shareEntries ?? true,
     bookableBy: member.bookableBy ?? [],
@@ -303,7 +307,9 @@ function withDefaults(member: Member): Member {
     notes: member.notes ?? {},
     calendarToken: member.calendarToken ?? null,
     pushSubscriptions: member.pushSubscriptions ?? [],
-    promotions: member.promotions ?? [],
+    // Pruned on load as well as on write, so a process that has been up for a
+    // week is not holding notices about classes that happened during it.
+    notices: currentNotices(noticesFrom(member), naiveNow()),
     syncError: member.syncError ?? null,
     lastSyncedAt: member.lastSyncedAt ?? null,
   }

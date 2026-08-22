@@ -87,7 +87,18 @@ const tomorrow = addDays(today, 1)
 const days = bookableDays(today)
 const lastBookable = lastBookableDate(today)
 
-const date = ref(today)
+/**
+ * Which day is showing. `?date=` so a link can point at one — the notice about
+ * a class somebody cancelled for you offers to find another that day.
+ *
+ * Checked against the days actually on offer rather than trusted: a date
+ * outside the booking window would render a strip with nothing selected on it
+ * and a timetable whose Book buttons are all going to fail.
+ */
+const route = useRoute()
+const requested = Array.isArray(route.query.date) ? route.query.date[0] : route.query.date
+const date = ref(typeof requested === 'string' && days.includes(requested) ? requested : today)
+
 const query = ref('')
 const grouping = ref<'category' | 'time'>('category')
 
