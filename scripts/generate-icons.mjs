@@ -132,6 +132,32 @@ function ico(images) {
 }
 
 /**
+ * Android's notification badge.
+ *
+ * The odd one out, and it has to be: Android throws away every colour in this
+ * image and keeps only the alpha channel, then tints the result to match the
+ * status bar. So there is no plate and no lime — a white glyph on nothing,
+ * where "white" is only a way of saying "opaque". Drawing the usual icon here
+ * would produce a filled square, because the plate is opaque everywhere.
+ *
+ * It is the single cube for the same reason the 16px favicon is: it renders at
+ * about 24 device pixels in a status bar, where three cubes are a smudge.
+ */
+function badge(size = 96) {
+  const glyph = size * 0.82
+  const offset = (size - glyph) / 2
+  const unit = glyph / 24
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+  <g transform="translate(${offset} ${offset}) scale(${unit})"
+     fill="none" stroke="#ffffff" stroke-width="2.4"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path d="${BOX}"/>
+  </g>
+</svg>`
+}
+
+/**
  * The link-preview card.
  *
  * The one piece of this that is not an icon, and the reason it exists: the way
@@ -191,6 +217,11 @@ await write('apple-touch-icon.png', await png({ radius: 0 }, 180))
 
 /** Android's maskable slot: full bleed, artwork inside the middle 80%. */
 await write('icon-maskable-512.png', await png({ scale: 0.46, radius: 0 }, 512))
+
+/** The status-bar mark on a pushed notification. Alpha only — see `badge`. */
+await write('badge.png', await sharp(Buffer.from(badge()))
+  .png({ compressionLevel: 9 })
+  .toBuffer())
 
 /**
  * The tab icon, at the three sizes browsers pick from.

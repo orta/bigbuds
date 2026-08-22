@@ -138,6 +138,14 @@ const bookedCount = computed(() =>
 const pendingId = ref<string | null>(null)
 
 /**
+ * The class whose description and notes are open, if any.
+ *
+ * Held here rather than in each card so there is one modal on the page and one
+ * request behind it, however many rows the day has.
+ */
+const detail = ref<ClassRow | null>(null)
+
+/**
  * Books a class. `subject` is somebody who has asked this member to book for
  * them; without it the booking is the member's own.
  *
@@ -346,6 +354,7 @@ const describe = (error: unknown) =>
             :book-for="bookFor"
             @book="book"
             @cancel="cancel"
+            @open="detail = $event"
           />
         </div>
       </section>
@@ -361,7 +370,10 @@ const describe = (error: unknown) =>
         show-around
         @book="book"
         @cancel="cancel"
+        @open="detail = $event"
       />
     </div>
+
+    <ClassDetail v-model="detail" />
   </div>
 </template>

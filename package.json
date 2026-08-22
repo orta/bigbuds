@@ -12,7 +12,8 @@
     "lint": "eslint .",
     "start": "node .output/server/index.mjs",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "vapid": "web-push generate-vapid-keys"
   },
   "dependencies": {
     "@formkit/auto-animate": "0.10.0",
@@ -44,11 +45,13 @@
     "typescript": "~5.9",
     "vue": "^3.5.41",
     "vue-router": "^5.2.0",
+    "web-push": "^3.6.7",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@iconify-json/lucide": "^1.2.124",
     "@types/node": "^26.2.0",
+    "@types/web-push": "^3.6.4",
     "vitest": "^4.1.11",
     "vue-tsc": "^3.3.10"
   },

@@ -82,6 +82,38 @@ export function relativeDayLabel(date: string, today: string, tomorrow: string):
   return dayLabel(date, 'short')
 }
 
+/**
+ * `just now`, `3 days ago`, `in March` — how long ago a note was written.
+ *
+ * The one thing in this file that does take a `Date`, and legitimately: a
+ * note's `updatedAt` is a real ISO instant with an offset on it, not one of
+ * the club's naive wall-clock strings. An instant means the same moment
+ * everywhere, so there is nothing here to reinterpret.
+ */
+export function agoLabel(iso: string, now: number = Date.now()): string {
+  const at = Date.parse(iso)
+  if (Number.isNaN(at)) return ''
+
+  const minutes = Math.floor((now - at) / 60_000)
+
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`
+
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
+
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`
+
+  // Past a month the exact gap stops being the point, and "in March" places it
+  // better than "in 47 days" does.
+  const when = new Date(at)
+  const month = MONTHS[when.getUTCMonth()]
+  return when.getUTCFullYear() === new Date(now).getUTCFullYear()
+    ? `in ${month}`
+    : `in ${month} ${when.getUTCFullYear()}`
+}
+
 /** `Today at 18:30` / `Mon 24 at 09:00` — for a single upcoming class. */
 export function whenLabel(start: Naive, today: string, tomorrow: string): string {
   const date = naiveDate(start)

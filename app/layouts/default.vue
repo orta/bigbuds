@@ -1,4 +1,13 @@
 <script setup lang="ts">
+import { whenLabel } from '#shared/format'
+import { addDays, today as clubToday } from '#shared/naive'
+
+interface Promotion {
+  classEventId: string
+  name: string
+  startedAt: string
+}
+
 const { user, loggedIn, clear } = useUserSession()
 const route = useRoute()
 
@@ -7,6 +16,36 @@ const links = [
   { label: 'My classes', to: '/bookings', icon: 'i-lucide-check-circle-2' },
   { label: 'People', to: '/people', icon: 'i-lucide-users' },
 ]
+
+const today = clubToday()
+const tomorrow = addDays(today, 1)
+
+/**
+ * Waiting-list places the club has given this member since they last looked.
+ *
+ * In the layout rather than on one page, because the club promotes while
+ * nobody is watching and there is no telling where somebody will come back in.
+ * Whatever page they open should be the one that tells them.
+ */
+const { data: news, refresh: refreshPromotions } = await useFetch<{ promotions: Promotion[] }>(
+  '/api/promotions',
+  // Nothing to ask about for somebody who is not signed in, and asking would
+  // be a 401 on the login page.
+  { immediate: loggedIn.value, default: () => ({ promotions: [] }) },
+)
+
+const promotions = computed(() => news.value?.promotions ?? [])
+const dismissing = ref(false)
+
+async function dismiss() {
+  dismissing.value = true
+  try {
+    await $fetch('/api/promotions/seen', { method: 'POST' })
+    await refreshPromotions()
+  } finally {
+    dismissing.value = false
+  }
+}
 
 async function signOut() {
   await $fetch('/api/auth/logout', { method: 'POST' })
@@ -61,6 +100,33 @@ async function signOut() {
     </header>
 
     <main class="mx-auto max-w-4xl px-4 py-6">
+      <!-- The one thing the club does silently, said out loud. Dismissed by
+           hand rather than by having been rendered — see the seen endpoint. -->
+      <UAlert
+        v-if="promotions.length"
+        icon="i-lucide-party-popper"
+        color="success"
+        variant="subtle"
+        class="mb-5"
+        :title="promotions.length === 1
+          ? `You are off the waiting list for ${promotions[0]!.name}`
+          : `You are off the waiting list for ${promotions.length} classes`"
+        :close="{ color: 'success', variant: 'ghost', loading: dismissing }"
+        @update:open="dismiss"
+      >
+        <template #description>
+          <ul class="space-y-0.5">
+            <li v-for="promotion in promotions" :key="promotion.classEventId">
+              <span class="font-medium">{{ promotion.name }}</span>
+              — {{ whenLabel(promotion.startedAt, today, tomorrow) }}
+            </li>
+          </ul>
+          <NuxtLink to="/bookings" class="mt-1 inline-block underline underline-offset-2">
+            See it with your other classes
+          </NuxtLink>
+        </template>
+      </UAlert>
+
       <slot />
     </main>
   </div>

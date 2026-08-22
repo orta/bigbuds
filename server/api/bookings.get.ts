@@ -9,20 +9,24 @@ import { CATEGORIES, lookupClass } from '#shared/categories'
 import { naiveNow, today } from '#shared/naive'
 import type { ClassRow } from '#shared/types'
 import { alsoGoing, clientFor } from '../utils/members'
+import { noteCounts } from '../utils/notes'
 import { getClassEvent, getDirectory } from '../utils/planning'
 import { classStart, isActive, isCancellable, isQueued, resolve } from '../utils/resamania'
 import { requireMember } from '../utils/session'
+import { readMembers } from '../utils/store'
 
 export default defineEventHandler(async event => {
   const member = await requireMember(event)
   const client = await clientFor(member)
 
-  const [directory, attendees] = await Promise.all([
+  const [directory, attendees, everyone] = await Promise.all([
     getDirectory(client),
     client.bookingsFrom(today()),
+    readMembers(),
   ])
 
   const now = naiveNow()
+  const notes = noteCounts(everyone)
 
   const upcoming = attendees.filter(isActive).flatMap(attendee => {
     const embedded = attendee.classEvent
@@ -62,6 +66,7 @@ export default defineEventHandler(async event => {
         finished: false,
         attendedCount: entry.activityId ? (member.attended[entry.activityId]?.count ?? 0) : 0,
         attendedLast: entry.activityId ? (member.attended[entry.activityId]?.lastAt ?? null) : null,
+        noteCount: entry.activityId ? (notes[entry.activityId] ?? 0) : 0,
         going: [],
         // Booking for other people happens on the timetable, where the whole
         // day is in front of you; this page is your own classes.

@@ -26,6 +26,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   book: [entry: ClassRow, subject?: BookingBuddy]
   cancel: [entry: ClassRow, subject?: BookingBuddy]
+  /** The name was clicked: show what the club and other members say about it. */
+  open: [entry: ClassRow]
 }>()
 
 const when = computed(() => timeRange(props.entry.start, props.entry.durationMinutes))
@@ -165,7 +167,36 @@ const initials = (name: string) =>
     <div class="min-w-0 flex-1">
       <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span class="font-mono text-sm tabular-nums text-muted">{{ when }}</span>
-        <h3 class="font-medium tracking-tight">{{ entry.name }}</h3>
+
+        <!-- The name is the way in to the description and the notes. A button
+             rather than a link: it opens something beside the timetable rather
+             than navigating away from the day you were reading. -->
+        <h3 class="font-medium tracking-tight">
+          <button
+            type="button"
+            class="rounded text-left decoration-dotted underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            :aria-label="`About ${entry.name}`"
+            @click="emit('open', entry)"
+          >
+            {{ entry.name }}
+          </button>
+        </h3>
+
+        <!-- What makes the name worth clicking. Silent at zero, because most
+             classes have nothing behind them and sixty empty markers would
+             teach people the marker means nothing. -->
+        <UBadge
+          v-if="entry.noteCount"
+          :label="String(entry.noteCount)"
+          icon="i-lucide-message-square-text"
+          color="neutral"
+          variant="subtle"
+          size="sm"
+          class="cursor-pointer"
+          :aria-label="`${entry.noteCount} ${entry.noteCount === 1 ? 'note' : 'notes'} from members`"
+          @click="emit('open', entry)"
+        />
+
         <UBadge
           v-if="status"
           :label="status.label"

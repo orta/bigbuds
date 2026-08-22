@@ -10,9 +10,11 @@ import { CATEGORIES, lookupClass } from '#shared/categories'
 import { addDays, naiveNow, today } from '#shared/naive'
 import type { ClassRow } from '#shared/types'
 import { alsoGoing, bookingBuddies, clientFor, isAround, regularsOn } from '../utils/members'
+import { noteCounts } from '../utils/notes'
 import { getDirectory, getPlanning } from '../utils/planning'
 import { resolve } from '../utils/resamania'
 import { requireMember } from '../utils/session'
+import { readMembers } from '../utils/store'
 import { z } from 'zod'
 
 const Query = z.object({
@@ -27,16 +29,18 @@ export default defineEventHandler(async event => {
   const from = date ?? today()
   const client = await clientFor(member)
 
-  const [directory, events, regulars, buddies] = await Promise.all([
+  const [directory, events, regulars, buddies, everyone] = await Promise.all([
     getDirectory(client),
     // `to` is exclusive, so this is exactly one day.
     getPlanning(client, member.clubId, from, addDays(from, 1)),
     regularsOn(from, member.contactId),
     // The people who have asked this member to book for them.
     bookingBuddies(member.contactId),
+    readMembers(),
   ])
 
   const now = naiveNow()
+  const notes = noteCounts(everyone)
 
   const entries: ClassRow[] = events.map(classEvent => {
     const entry = resolve(directory, classEvent, member.contactId)
@@ -56,6 +60,7 @@ export default defineEventHandler(async event => {
       finished: entry.start !== null && entry.start < now,
       attendedCount: attended?.count ?? 0,
       attendedLast: attended?.lastAt ?? null,
+      noteCount: entry.activityId ? (notes[entry.activityId] ?? 0) : 0,
       going: [],
       around: entry.start
         ? regulars.filter(regular => isAround(regular, entry.start!))

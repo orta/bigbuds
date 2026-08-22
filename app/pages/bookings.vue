@@ -34,6 +34,9 @@ const byDay = computed(() => {
 
 const pendingId = ref<string | null>(null)
 
+/** The class whose description and notes are open, if any. */
+const detail = ref<ClassRow | null>(null)
+
 async function cancel(entry: ClassRow) {
   if (!entry.attendeeId) return
 
@@ -93,9 +96,12 @@ async function cancel(entry: ClassRow) {
             :entry="entry"
             :pending="pendingId === entry.id"
             @cancel="cancel"
+            @open="detail = $event"
           />
         </div>
       </section>
     </div>
+
+    <ClassDetail v-model="detail" />
   </div>
 </template>

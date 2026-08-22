@@ -37,11 +37,37 @@ that class, they simply tend to be at the club around then.
 finds Body Pump and Spin as well as Legs, Bums and Tums. Multi-word queries narrow rather than
 widen — `beginner pilates` will not match Advanced Reformer.
 
+**What a class actually is.** Clicking a class name opens the club's own description of it —
+which is in the API, and which the timetable has nowhere to put — along with its tags, how many
+times you have been, and the notes members have left. A class with notes on it carries a count
+beside its name, because a name with four people's advice behind it should not look like one with
+nothing.
+
+**Notes.** Everyone can write one note per class type, which everyone else can see against their
+name. The club's description says what the session is, in the voice of the person selling it;
+what it cannot say is the thing you only learn by going — that this one is harder than the name
+suggests, that the 06:30 fills from the front row back, that you want grip socks. Notes are keyed
+to the class *type* rather than to one Tuesday's instance, so writing one is worth doing once.
+
 **Booking and waiting lists.** Book and cancel in a click. A full class shows how many people are
 already waiting — `Full · 6 waiting` — because that, rather than the fact it is full, is what
 tells you whether joining the list is worth it. Once you are on it, your place is shown in
 context as `#2 of 6`. The club auto-promotes, so you move up without doing anything if a spot
 frees.
+
+**And it tells you when that happens.** The club promotes silently, so the one thing a member most
+wants to know — *you are in* — is the one thing they can only find out by opening an app and
+looking. BigBuds is already signing in as everybody every fifteen minutes, and already working out
+each booking's state in order to store it, so noticing costs nothing: a place that was `queued`
+last time and is `booked` now is a promotion. It arrives as a push notification if the member has
+turned them on, and as a banner in the app if they have not — see [Being told you are
+in](#being-told-you-are-in).
+
+**Your classes in your calendar.** A private, subscribable link that puts what you have booked
+alongside everything else you have on. It keeps itself current: bookings made in the club's own
+app appear within about fifteen minutes, and cancelling anywhere removes them. Waiting-list places
+go in as tentative events titled *Waiting list · Body Pump*, which is the calendar's version of
+the dimmed avatars on the timetable.
 
 **Booking each other in.** A member can name people who are allowed to book them onto classes —
 one partner, a training buddy, whoever they choose — from the switch beside that person's name on
@@ -69,7 +95,9 @@ whole without them looking bookable.
 
 BigBox is the source of truth for the timetable and for who is booked onto what. This app's own
 store holds only the things the club's API has no concept of: that a member has joined *this*
-app, a snapshot of their upcoming bookings, and a rolling week of their gym visits.
+app, a snapshot of their upcoming bookings, a rolling week of their gym visits, and the handful of
+things members have added themselves — their notes, their calendar link, the devices they want
+notifying, and the waiting-list promotions they have not yet acknowledged.
 
 Members' bookings are refreshed three ways, so the shared view stays close to live:
 
@@ -201,6 +229,115 @@ quoted when the arrivals actually cluster. Someone who came once at 09:25 and on
 median of 14:18 — an afternoon they were never there — so `usualPattern` reports `consistent:
 false` and the UI says the visits vary instead. There is a test pinning that exact case.
 
+## Notes
+
+One note per member per class type, in that member's own file, keyed by activity IRI. Keyed that
+way — rather than by class event — for the same reason the attendance count is: a note about Body
+Pump is about Body Pump, not about one Tuesday's instance of it, and keying it to the event would
+mean writing the same thing every week and watching all of it fall off the end of the timetable as
+each class passed.
+
+The timetable carries a `noteCount` per class and nothing else. A day holds sixty-odd classes and
+a member opens one or two, so sending every note with the grid would be paying for the whole
+feature on every page load — but sending *nothing* would leave the feature undiscoverable, because
+a class name with four people's advice behind it would look exactly like one with nothing. The
+count is computed in one pass over every member, which at a gym's scale is a loop over a few dozen
+small objects.
+
+Notes ignore the `visible` switch, deliberately. That setting is about whether your *bookings*
+appear on other people's timetables — something that happens to you as a side effect of booking a
+class. Writing a note is a deliberate act with a name attached, and the composer says so. Hiding
+one behind the other setting would mean a member wrote something, was told it was posted, and it
+silently was not.
+
+## The calendar feed
+
+`/calendar/<token>.ics`, outside the session entirely, because a calendar client sends no cookie
+and cannot be asked for one. The token in the path is the whole of the authentication — 32 random
+bytes, and the only revocation a URL can have is being replaced, so resetting issues a new one and
+breaks every subscription to the old. Settings says as much in those words.
+
+Three things about it are worth knowing before changing it:
+
+- **It is served from the snapshot, not from BigBox.** Calendar clients poll on their own
+  schedule and there are several per member. Signing in as somebody to answer each poll would put
+  the club's API under a load nobody is watching. The snapshot is refreshed every fifteen minutes
+  anyway, which is well inside how fresh a calendar needs to be.
+- **Which is why a stored booking now carries its name.** The snapshot began as three fields,
+  which is all the shared timetable needs — it already has the club's copy of every class in front
+  of it and only wants to know who is on which. The feed has no such copy, so `StoredBooking`
+  gained `name`, `endedAt`, `studio` and `coach`. They are optional, because records written
+  before this existed do not have them; the feed leaves out a booking it cannot name rather than
+  emitting an event called "Class", and one sync fixes it.
+- **The times go out as they came in.** This is the one place the club's naive wall-clock strings
+  leave the building, and iCalendar has somewhere honest to put them:
+  `DTSTART;TZID=Europe/London:20260814T063000` says *06:30 in London*, which is exactly what the
+  API meant. Converting to UTC would work and is what most exporters do, but it would mean this
+  code computing an offset — the thing [`shared/naive.ts`](./shared/naive.ts) exists to avoid —
+  and it would show the wrong hour to anybody who exported in August and read in January. The cost
+  is that the feed has to define the zone it names, which is the `VTIMEZONE` block in
+  [`shared/ics.ts`](./shared/ics.ts): two recurrence rules, unchanged since 1996, that say when
+  Britain's clocks move.
+
+The file is written by hand rather than with a library, for the same reason `favicon.ico` is: the
+subset of RFC 5545 that a read-only feed of timed events needs is small and completely specified,
+and the parts that are easy to get wrong — folding, escaping, the timezone — are exactly the parts
+a library would hide. Folding is measured in octets rather than characters and splits between
+codepoints, because a coach with an accent in their name costs two bytes and a split in the middle
+of one produces mojibake. There are tests pinning that, and pinning that a real newline in a
+description becomes the two characters `\n` — a literal one would start a new property and
+silently truncate the rest of the member's calendar.
+
+## Being told you are in
+
+The club promotes off its waiting lists automatically and tells nobody, which makes it the single
+thing this app is best placed to say. [`shared/promotions.ts`](./shared/promotions.ts) is the
+whole of the detection: a booking that was `queued` in the previous snapshot and is `booked` in
+this one. Three transitions look similar and only that one is news — *absent → booked* is somebody
+pressing Book, and *absent → queued* is somebody joining a list; they both know already.
+
+A class that has already started is left out. The sync fetches from the club's midnight, so a
+07:00 run still sees this morning's 06:30, and being told at 07:00 that a place opened up at 06:25
+is worse than being told nothing.
+
+One case it deliberately cannot tell apart: a member who leaves a waiting list and books a seat
+outright between two syncs looks exactly like a promotion, because in the snapshot it *is*
+queued-then-booked. Distinguishing them would mean recording every action the app takes and every
+one it does not — the club's own app can do this too — to suppress a message whose worst case is
+telling somebody something they already knew.
+
+It is announced twice, and both halves matter:
+
+- **A push notification**, sent only from the scheduled sync. `syncMember` also runs on sign-in
+  and straight after a booking, and a promotion detected on either of those is one the member is
+  already looking at. The scheduled run is the path where nobody is looking, which is the whole
+  reason to interrupt them.
+- **A banner in the app**, from a record kept against the member, dismissed by hand rather than by
+  having been rendered. Push is best-effort — it needs permission, it needs the app on the home
+  screen before iOS will allow it at all, and a message can simply not arrive. Without the record,
+  a member who never turns notifications on would get nothing from the one piece of news the app
+  exists to give them. The record is dropped once the class starts, seen or not, which is also
+  what stops the list growing without a bound anyone chose.
+
+Notifications are the one thing this app will ever send, and the settings copy says so.
+
+### Why `web-push` is a dependency
+
+Nearly everything else here that could have been a dependency was written out by hand. This one
+is not, and the reason is the failure mode rather than the size.
+
+A push message is a VAPID JWT plus an RFC 8291 payload: ECDH over P-256, HKDF twice, AES-128-GCM
+with a particular record framing. All of it is in `node:crypto` and it is perhaps a hundred and
+fifty lines. But there is no way to test it short of a live push service and a real device, and
+every way of getting it subtly wrong produces the same symptom — the request is accepted, and the
+notification never arrives. Silent non-delivery is the worst possible outcome for this feature: a
+member waits for a message that was never going to come, and nothing anywhere says so.
+
+`public/sw.js` is hand-written, though. A push can only be delivered to a service worker, so there
+has to be one — but this app has nothing it wants to cache, so a PWA toolchain would bring a build
+step, a precache manifest and a set of decisions about stale content for a file that handles two
+events.
+
 ## Wall-clock times
 
 [`shared/naive.ts`](./shared/naive.ts) keeps the API's timestamps as strings and never turns them
@@ -283,11 +420,21 @@ Sign in with a real BigBox membership — there is no separate registration, bec
 | `yarn dev` | development server on :3000 |
 | `yarn test` | unit tests |
 | `yarn lint` | eslint |
+| `yarn icons` | redraws the app icons into `public/` |
+| `yarn vapid` | generates a keypair for push notifications |
 
 The tests cover the category table, search matching, the capacity and booking-state logic in the
-API client, the wall-clock arithmetic across both DST transitions, and grouping badge scans into
-visits — the last of those pinned against scans the club actually produced. They are all pure
+API client, the wall-clock arithmetic across both DST transitions, grouping badge scans into
+visits — pinned against scans the club actually produced — which snapshot transitions count as a
+waiting-list promotion, and the iCalendar output, down to the octet-counted line folding and the
+escaping that stops a newline in a note truncating somebody's calendar. They are all pure
 functions — nothing in the suite talks to BigBox.
+
+Notifications are the one part with no unit test behind it, because there is nothing to assert
+against short of a live push service and a real device. What can be checked instead is that the
+message is assembled and sent: point `web-push` at a local HTTPS endpoint and confirm it posts
+with a `vapid` authorization header, `content-encoding: aes128gcm`, and a body that is not the
+plaintext.
 
 ## Deploying to Railway
 
@@ -307,6 +454,9 @@ builds identically on a laptop.
    | `NUXT_SESSION_PASSWORD` | seals the session cookie |
    | `BIGBUDS_ENCRYPTION_KEY` | encrypts stored passwords — **back this up**, losing it signs everyone out permanently |
    | `BIGBUDS_SYNC_TOKEN` | optional; only if driving the sync externally |
+   | `BIGBUDS_VAPID_PUBLIC_KEY` | optional; `yarn vapid` generates the pair. Without them the app still notices a promotion and shows it in-app — only the notification is missing |
+   | `BIGBUDS_VAPID_PRIVATE_KEY` | the other half. Changing either invalidates every subscription, and members have to turn notifications on again |
+   | `BIGBUDS_VAPID_SUBJECT` | optional; a `mailto:` for a push service with a complaint about this app |
 
 The container does not pin a port. Railway injects `PORT` and health-checks it, and Nitro
 resolves `NITRO_PORT` before `PORT` — so setting `NITRO_PORT` in the image makes the app listen on

@@ -9,15 +9,28 @@
  */
 
 import { naiveNow, naiveTime, parseNaive, today } from '#shared/naive'
+import type { Promotion } from '#shared/promotions'
+import { BOOKED, QUEUED, detectPromotions } from '#shared/promotions'
 import type { Visit } from '#shared/visits'
 import { toVisits, weekdayOf } from '#shared/visits'
 import { decrypt, encrypt } from './crypto'
+import { getDirectory } from './planning'
 import type { Attendee } from './resamania'
-import { Client, classStart, isActive, isQueued } from './resamania'
+import {
+  Client,
+  activityName,
+  classEnd,
+  classStart,
+  coachName,
+  isActive,
+  isQueued,
+  studioName,
+} from './resamania'
 import {
   type Attended,
   type Member,
   type StoredBooking,
+  type StoredPromotion,
   readMember,
   readMembers,
   writeMember,
@@ -106,6 +119,13 @@ export async function signIn(email: string, password: string): Promise<Member> {
     entries: current?.entries ?? [],
     attended: current?.attended ?? {},
     attendedSyncedAt: current?.attendedSyncedAt ?? null,
+    notes: current?.notes ?? {},
+    // Signing in again must not silently reissue the calendar URL somebody
+    // has already subscribed a phone to, nor re-register a device they turned
+    // notifications off on.
+    calendarToken: current?.calendarToken ?? null,
+    pushSubscriptions: current?.pushSubscriptions ?? [],
+    promotions: current?.promotions ?? [],
     createdAt: current?.createdAt ?? now,
 
     contactId: profile.contactId,
@@ -140,15 +160,21 @@ export const findMember = readMember
  * and still inside the retention window is kept, and new scans are merged in.
  * That is what makes a week of history possible at all.
  */
-export async function syncMember(member: Member): Promise<{ bookings: number, entries: number }> {
+export async function syncMember(
+  member: Member,
+): Promise<{ bookings: number, entries: number, promotions: Promotion[] }> {
   const client = await clientFor(member)
   const from = today()
 
-  const [attendees, entries] = await Promise.all([
+  const [attendees, entries, directory] = await Promise.all([
     client.bookingsFrom(from),
     // A member who has turned visit sharing off should not have their
     // movements collected in the first place, not merely hidden at render.
     member.shareEntries ? client.entries(member.contactId) : Promise.resolve([]),
+    // Process-wide and cached for six hours, so this is free after the first
+    // member of the run. It is what turns the IRIs on a booking into the names
+    // the calendar feed and the promotion notice have to say out loud.
+    getDirectory(client),
   ])
 
   const scans = entries.flatMap(entry => {
@@ -158,15 +184,22 @@ export async function syncMember(member: Member): Promise<{ bookings: number, en
     return at ? [{ id: entry['@id'], at, crossingPoint: entry.crossingPoint ?? '' }] : []
   })
 
-  const bookings = attendees.filter(isActive).flatMap(attendee => {
+  const bookings: StoredBooking[] = attendees.filter(isActive).flatMap(attendee => {
     const event = attendee.classEvent
     const start = event ? classStart(event) : null
     if (!event || !start) return []
 
     return [{
       classEventId: event['@id'],
-      state: isQueued(attendee) ? 'queued' : 'booked',
+      state: isQueued(attendee) ? QUEUED : BOOKED,
       startedAt: start,
+      // Enough to describe the class without asking the club again — see
+      // `StoredBooking`. The class embedded in a booking is the thin copy, but
+      // it does carry the IRIs, which is all the directory needs.
+      name: activityName(directory, event) ?? 'Class',
+      endedAt: classEnd(event) ?? undefined,
+      studio: studioName(directory, event),
+      coach: coachName(directory, event),
     }]
   })
 
@@ -177,8 +210,18 @@ export async function syncMember(member: Member): Promise<{ bookings: number, en
 
   const cutoff = cutoffDate()
 
+  /**
+   * Filled in inside the write, so the comparison is against what is actually
+   * on disk rather than against the copy this function was handed — which by
+   * now may be a sync or a booking out of date, and would re-announce a
+   * promotion that was already announced.
+   */
+  let promotions: Promotion[] = []
+
   const saved = await writeMember(member.contactId, current => {
     const base = current ?? member
+
+    promotions = detectPromotions(base.bookings ?? [], bookings, naiveNow())
 
     // Merge by entry IRI: the API's window overlaps what we already hold, and
     // re-adding the same scan every fifteen minutes would multiply it.
@@ -195,13 +238,47 @@ export async function syncMember(member: Member): Promise<{ bookings: number, en
       entries: base.shareEntries
         ? [...merged.values()].filter(entry => entry.at >= cutoff).sort((a, b) => a.at.localeCompare(b.at))
         : [],
+      promotions: keepCurrent([
+        ...base.promotions,
+        ...promotions.map(promotion => ({
+          ...promotion,
+          noticedAt: new Date().toISOString(),
+          seen: false,
+        })),
+      ]),
       syncError: null,
       lastSyncedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
   })
 
-  return { bookings: saved.bookings.length, entries: saved.entries.length }
+  return {
+    bookings: saved.bookings.length,
+    entries: saved.entries.length,
+    promotions,
+  }
+}
+
+/**
+ * Drops promotions whose class has been and gone.
+ *
+ * A promotion is news about a class you are about to go to, so it stops being
+ * anything once the class starts — seen or not. That is also what keeps the
+ * list from growing without bound, which matters because it lives in a file
+ * that is read into memory whole.
+ */
+function keepCurrent(promotions: StoredPromotion[]): StoredPromotion[] {
+  const now = naiveNow()
+  return promotions.filter(promotion => promotion.startedAt >= now)
+}
+
+/** Marks every promotion the member is currently being shown as seen. */
+export function markPromotionsSeen(contactId: string): Promise<Member> {
+  return writeMember(contactId, current => ({
+    ...current!,
+    promotions: current!.promotions.map(promotion => ({ ...promotion, seen: true })),
+    updatedAt: new Date().toISOString(),
+  }))
 }
 
 function staleAttendance(member: Member): boolean {

@@ -29,6 +29,30 @@ export interface BookedFor extends BookingBuddy {
   state: string
 }
 
+/** Another member's note about a class type. */
+export interface ClassNote {
+  contactId: string
+  name: string
+  text: string
+  /** ISO instant. */
+  updatedAt: string
+}
+
+/**
+ * Everything shown under a class's description.
+ *
+ * The viewer's own note is separated from everyone else's rather than flagged
+ * within one list, because it is the only one they can act on: theirs is a
+ * text box with their words already in it, and the rest are things other
+ * people wrote. One list with an "edit" affordance on exactly one row is the
+ * same information arranged so the reader has to find it.
+ */
+export interface ClassNotes {
+  /** The viewer's own note, or null if they have not written one. */
+  yours: string | null
+  others: ClassNote[]
+}
+
 /** Somebody whose gym visits suggest they are usually here around now. */
 export interface AroundMember {
   contactId: string
@@ -87,6 +111,17 @@ export interface ClassRow {
    * this one decides whether the row offers to book them or to cancel.
    */
   bookedFor: BookedFor[]
+
+  /**
+   * How many notes members have left about this class type.
+   *
+   * A count rather than the notes themselves: a day holds sixty-odd classes
+   * and almost none of them are open, so sending every note with the timetable
+   * would be paying for the whole feature on every page load. The count is
+   * what makes it discoverable — a class name with nothing behind it looks the
+   * same as one with four people's advice behind it.
+   */
+  noteCount: number
 
   /** How many times the viewer has been to this class type before. */
   attendedCount: number

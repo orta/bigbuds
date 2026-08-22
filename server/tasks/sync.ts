@@ -12,7 +12,8 @@ export default defineTask({
   async run() {
     const report = await syncAllMembers()
     console.log(
-      `[sync] ${report.synced}/${report.members} members synced, ${report.failed} failed`,
+      `[sync] ${report.synced}/${report.members} members synced, ${report.failed} failed`
+      + (report.promoted ? `, ${report.promoted} promoted off waiting lists` : ''),
     )
     return { result: report }
   },

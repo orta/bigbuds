@@ -79,6 +79,104 @@ const saveEntries = (next: boolean) => save('shareEntries', next, {
   off: 'Your gym hours are hidden, and what was recorded has been deleted',
 })
 
+// --- Notifications ---
+
+const push = usePush()
+
+/**
+ * The switch's own state, so it can be moved back if the browser refuses.
+ *
+ * Kept in step with what `usePush` found rather than being the source of
+ * truth: the browser is, and it can drop a subscription without telling us.
+ */
+const notify = ref(false)
+watch(() => push.subscribed.value, next => { notify.value = next }, { immediate: true })
+
+async function saveNotify(next: boolean) {
+  const ok = next ? await push.enable() : await push.disable()
+
+  if (!ok) {
+    notify.value = !next
+    return
+  }
+
+  toast.add({
+    title: next
+      ? 'You will be told when a place comes up'
+      : 'Notifications are off on this device',
+    icon: next ? 'i-lucide-bell' : 'i-lucide-bell-off',
+    color: 'neutral',
+  })
+}
+
+// --- Calendar ---
+
+const { data: calendar, refresh: refreshCalendar } = await useFetch<{ path: string | null }>(
+  '/api/me/calendar',
+)
+
+const calendarBusy = ref(false)
+
+/**
+ * The absolute URL to hand a calendar app, taken from the browser's own
+ * origin rather than from a configured domain — which would be wrong the first
+ * time this deployment moved, and wrong in development always.
+ */
+const calendarUrl = computed(() => {
+  const path = calendar.value?.path
+  if (!path || !import.meta.client) return null
+  return `${window.location.origin}${path}`
+})
+
+/** The same thing as a `webcal:`, which is what makes a phone offer to subscribe. */
+const webcalUrl = computed(() => calendarUrl.value?.replace(/^https?:/, 'webcal:') ?? null)
+
+async function issueCalendar() {
+  calendarBusy.value = true
+  try {
+    await $fetch('/api/me/calendar', { method: 'POST' })
+    await refreshCalendar()
+  } catch {
+    toast.add({ title: 'Could not set that up', color: 'error', icon: 'i-lucide-alert-circle' })
+  } finally {
+    calendarBusy.value = false
+  }
+}
+
+async function revokeCalendar() {
+  calendarBusy.value = true
+  try {
+    await $fetch('/api/me/calendar', { method: 'DELETE' })
+    await refreshCalendar()
+    toast.add({
+      title: 'That calendar link no longer works',
+      description: 'Anything subscribed to it will stop updating.',
+      icon: 'i-lucide-link-2-off',
+      color: 'neutral',
+    })
+  } catch {
+    toast.add({ title: 'Could not do that', color: 'error', icon: 'i-lucide-alert-circle' })
+  } finally {
+    calendarBusy.value = false
+  }
+}
+
+async function copyCalendar() {
+  if (!calendarUrl.value) return
+
+  try {
+    await navigator.clipboard.writeText(calendarUrl.value)
+    toast.add({ title: 'Copied', icon: 'i-lucide-clipboard-check', color: 'neutral' })
+  } catch {
+    toast.add({
+      title: 'Could not copy that',
+      description: 'Select the link and copy it by hand.',
+      color: 'error',
+      icon: 'i-lucide-alert-circle',
+    })
+  }
+}
+
 async function signOut() {
   await $fetch('/api/auth/logout', { method: 'POST' })
   await clear()
@@ -136,6 +234,120 @@ async function signOut() {
           @update:model-value="saveEntries"
         />
       </div>
+    </UCard>
+
+    <UCard>
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h2 class="font-medium">
+            Tell me when I get off a waiting list
+          </h2>
+          <p class="mt-1 text-sm text-muted">
+            The club promotes people off its waiting lists automatically and
+            tells nobody, so the only way to find out is to look. BigBuds
+            checks every fifteen minutes and can send you a notification the
+            moment a place becomes yours. It is the only thing it will ever
+            send you.
+          </p>
+
+          <p v-if="!push.configured.value" class="mt-2 text-sm text-warning">
+            This server has not been set up to send notifications. You will
+            still see it in the app the next time you open it.
+          </p>
+          <p v-else-if="!push.supported.value" class="mt-2 text-sm text-warning">
+            This browser cannot show notifications. On an iPhone, add BigBuds
+            to your home screen first and open it from there.
+          </p>
+          <p v-else-if="push.permission.value === 'denied'" class="mt-2 text-sm text-warning">
+            Your browser is blocking notifications for this site. That switch
+            is in its own settings rather than here.
+          </p>
+          <p v-else-if="notify" class="mt-2 text-sm text-muted">
+            On for this device. A phone and a laptop are separate — turn it on
+            wherever you want to hear about it.
+          </p>
+        </div>
+        <USwitch
+          v-model="notify"
+          :loading="push.busy.value"
+          :disabled="!push.configured.value || !push.supported.value
+            || push.permission.value === 'denied'"
+          @update:model-value="saveNotify"
+        />
+      </div>
+    </UCard>
+
+    <UCard>
+      <h2 class="font-medium">
+        Your classes in your calendar
+      </h2>
+      <p class="mt-1 text-sm text-muted">
+        A private link your phone or computer can subscribe to, so the classes
+        you book turn up alongside everything else you have on. It keeps itself
+        up to date — bookings made in the club's own app appear within about
+        fifteen minutes, and cancelling anywhere removes it.
+      </p>
+
+      <template v-if="calendarUrl">
+        <p class="mt-3 text-sm text-muted">
+          Treat this link like a password: anyone who has it can see your
+          classes, and there is no sign-in step to stop them. Reset it if it
+          gets out.
+        </p>
+
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <code
+            class="min-w-0 flex-1 truncate rounded-lg border border-default bg-elevated/60 px-3 py-2 text-xs"
+          >{{ calendarUrl }}</code>
+          <UButton
+            label="Copy"
+            icon="i-lucide-clipboard"
+            color="neutral"
+            variant="outline"
+            size="xs"
+            @click="copyCalendar"
+          />
+        </div>
+
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <UButton
+            v-if="webcalUrl"
+            label="Subscribe on this device"
+            icon="i-lucide-calendar-plus"
+            :to="webcalUrl"
+            external
+            size="xs"
+          />
+          <UButton
+            label="Reset the link"
+            icon="i-lucide-refresh-cw"
+            color="neutral"
+            variant="outline"
+            size="xs"
+            :loading="calendarBusy"
+            @click="issueCalendar"
+          />
+          <UButton
+            label="Turn it off"
+            icon="i-lucide-link-2-off"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :loading="calendarBusy"
+            @click="revokeCalendar"
+          />
+        </div>
+      </template>
+
+      <UButton
+        v-else
+        label="Create a calendar link"
+        icon="i-lucide-calendar-plus"
+        class="mt-3"
+        size="sm"
+        :loading="calendarBusy"
+        @click="issueCalendar"
+      />
     </UCard>
 
     <UCard>

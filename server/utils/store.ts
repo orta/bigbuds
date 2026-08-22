@@ -24,6 +24,7 @@
  * at once. `railway.json` pins one replica for that reason.
  */
 
+import { timingSafeEqual } from 'node:crypto'
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -35,6 +36,72 @@ export interface StoredBooking {
   state: string
   /** Naive start, `2026-08-14T06:30:00`, in the club's wall clock. */
   startedAt: string
+
+  /**
+   * Enough of the class to describe it without asking BigBox again.
+   *
+   * The snapshot began as three fields, which is all the shared timetable
+   * needs: it already has the club's own copy of every class in front of it
+   * and only wants to know who is on which. The calendar feed has no such
+   * copy — it is served to a calendar client with no session behind it, and
+   * signing in as the member on every poll to turn ids into names would mean
+   * hitting the club's API on somebody else's schedule.
+   *
+   * Optional because records written before this existed do not have them.
+   * They fill in on that member's next sync, and the feed leaves out a
+   * booking it cannot yet name rather than emitting `Class`.
+   */
+  name?: string
+  /** Naive end, for the event's duration. */
+  endedAt?: string
+  studio?: string | null
+  coach?: string | null
+}
+
+/** A member's own note about a class type. */
+export interface StoredNote {
+  /** Plain text, as typed. Trimmed and length-capped on the way in. */
+  text: string
+  /** ISO instant, so the reader can tell a note from last year. */
+  updatedAt: string
+}
+
+/**
+ * One browser or phone that has agreed to receive notifications.
+ *
+ * A member gets one of these per device rather than one each, because the
+ * subscription is issued by the browser and a phone and a laptop are two
+ * browsers. They expire on their own — a reinstalled app, a cleared site, a
+ * push service retiring an endpoint — so sending prunes the dead ones rather
+ * than expecting the member to tidy up.
+ */
+export interface StoredPushSubscription {
+  endpoint: string
+  /** The client's public key and auth secret, for RFC 8291 payload encryption. */
+  keys: { p256dh: string, auth: string }
+  createdAt: string
+}
+
+/**
+ * A waiting-list place that turned into a real one.
+ *
+ * Recorded as well as pushed, for two reasons. Push is best-effort — it needs
+ * permission, it needs the app installed to the home screen on iOS, and the
+ * message can simply not arrive — so a member who never turns it on would
+ * otherwise get nothing at all from the one piece of news the app is best
+ * placed to give them. And a notification is gone the moment it is swiped
+ * away, whereas this survives until they have actually looked.
+ */
+export interface StoredPromotion {
+  classEventId: string
+  /** The class's name at the time, so the record reads on its own later. */
+  name: string
+  /** Naive start of the class. */
+  startedAt: string
+  /** ISO instant the promotion was noticed — not when the club made it. */
+  noticedAt: string
+  /** Cleared once the member has seen it in the app. */
+  seen: boolean
 }
 
 /**
@@ -98,6 +165,36 @@ export interface Member {
   hiddenCategories: string[]
   /** Whether to drop classes that have already started from the timetable. */
   hideFinished: boolean
+
+  /**
+   * The member's own notes, keyed by activity IRI.
+   *
+   * Keyed by class *type* rather than by class event, for the same reason
+   * `attended` is: a note about Body Pump is a note about Body Pump, not about
+   * one Tuesday's instance of it. Keying it to the event would mean writing
+   * the same thing every week and losing all of it as each class passed.
+   *
+   * One note per member per class type. Editing replaces; there is no history,
+   * because this is a note rather than a thread.
+   */
+  notes: Record<string, StoredNote>
+
+  /**
+   * The secret in this member's calendar feed URL, or null if they have never
+   * asked for one.
+   *
+   * The URL is the whole credential — a calendar client subscribes once and
+   * polls forever with no way to sign in — so it is a fresh 32 bytes rather
+   * than anything derived from the member, and resetting it issues a new one
+   * and breaks the old, which is the only revocation a URL can have.
+   */
+  calendarToken: string | null
+
+  /** Devices that have agreed to receive notifications. Empty for most. */
+  pushSubscriptions: StoredPushSubscription[]
+
+  /** Waiting-list promotions noticed by the sync, newest last. */
+  promotions: StoredPromotion[]
 
   /**
    * Set when the background sync could not sign in — almost always because
@@ -203,6 +300,10 @@ function withDefaults(member: Member): Member {
     entries: member.entries ?? [],
     attended: member.attended ?? {},
     attendedSyncedAt: member.attendedSyncedAt ?? null,
+    notes: member.notes ?? {},
+    calendarToken: member.calendarToken ?? null,
+    pushSubscriptions: member.pushSubscriptions ?? [],
+    promotions: member.promotions ?? [],
     syncError: member.syncError ?? null,
     lastSyncedAt: member.lastSyncedAt ?? null,
   }
@@ -229,6 +330,30 @@ export async function readMembers(): Promise<Member[]> {
 export async function readMember(contactId: string): Promise<Member | undefined> {
   await load()
   return store.members.get(contactId)
+}
+
+/**
+ * The member whose calendar feed carries this token.
+ *
+ * A scan rather than an index: there is no second map to keep in step with the
+ * first, and at a gym's scale the loop is over a few dozen strings. The
+ * comparison is `timingSafeEqual` on equal-length buffers — the token is 32
+ * random bytes and not realistically guessable a character at a time over a
+ * network, but this is the one credential in the app that arrives in a URL,
+ * and the safe comparison costs nothing.
+ */
+export async function readMemberByCalendarToken(token: string): Promise<Member | undefined> {
+  await load()
+
+  const offered = Buffer.from(token)
+
+  for (const member of store.members.values()) {
+    if (!member.calendarToken) continue
+    const held = Buffer.from(member.calendarToken)
+    if (held.length === offered.length && timingSafeEqual(held, offered)) return member
+  }
+
+  return undefined
 }
 
 /**
