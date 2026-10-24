@@ -72,9 +72,36 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     session: {
+      // The cookie name. Bumped from the default `nuxt-session` when the app
+      // moved from BigBox/Resamania to Gladstone: a renamed cookie orphans
+      // every session sealed under the old name, so the whole club is signed
+      // out on deploy and signs back in against the new backend — which is
+      // required, since the stored passwords are now for the wrong API.
+      name: 'bigbuds-gs',
       // A month. Members check the timetable a few times a week, and being
       // logged out between visits would be the most annoying thing the app does.
       maxAge: 60 * 60 * 24 * 30,
+      // Production is served over HTTPS, so the session cookie is Secure. This
+      // is relaxed to `false` for local `nuxt dev` by the `$development`
+      // override below — a Secure cookie is silently dropped by the browser
+      // over plain http://localhost, which logs you straight back out on the
+      // post-login redirect and looks like "login succeeds but does nothing".
+      cookie: {
+        secure: true,
+      },
+    },
+  },
+
+  // Applied by Nuxt only when running `nuxt dev` (keyed off the dev flag, not
+  // NODE_ENV), so local development over http keeps working while builds stay
+  // Secure.
+  $development: {
+    runtimeConfig: {
+      session: {
+        cookie: {
+          secure: false,
+        },
+      },
     },
   },
 

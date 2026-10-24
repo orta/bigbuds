@@ -10,7 +10,7 @@
 import { forgetClient, recordSyncFailure, syncMember } from './members'
 import { deliver } from './notices'
 import { readMember, readMembers } from './store'
-import { ApiError } from './resamania'
+import { ApiError } from './gladstone'
 
 export interface SyncReport {
   members: number

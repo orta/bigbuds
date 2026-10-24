@@ -11,7 +11,7 @@ import type { ClassRow } from '#shared/types'
 import { alsoGoing, clientFor } from '../utils/members'
 import { noteCounts } from '../utils/notes'
 import { getClassEvent, getDirectory } from '../utils/planning'
-import { classStart, isActive, isCancellable, isQueued, resolve } from '../utils/resamania'
+import { classStart, isActive, isCancellable, isQueued, resolve } from '../utils/gladstone'
 import { requireMember } from '../utils/session'
 import { readMembers } from '../utils/store'
 

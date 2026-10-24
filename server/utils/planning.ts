@@ -12,7 +12,7 @@
  * the API had personalised would show one member another's state.
  */
 
-import type { ClassEvent, Client, Directory } from './resamania'
+import type { ClassEvent, Client, Directory } from './gladstone'
 
 interface Entry<T> {
   value: Promise<T>
@@ -67,7 +67,12 @@ export function getPlanning(
   from: string,
   to: string,
 ): Promise<ClassEvent[]> {
-  return cached(`planning:${clubId}:${from}:${to}`, PLANNING_TTL_MS, () =>
+  // Keyed by member, not just by club: Gladstone personalises the timetable —
+  // each session carries the viewer's own booking state — so a grid cached
+  // under one member must never be served to another, or it would show them
+  // somebody else's bookings. (Resamania's grid was identical for everyone,
+  // and this key was just the club.)
+  return cached(`planning:${client.profile.contactId}:${clubId}:${from}:${to}`, PLANNING_TTL_MS, () =>
     client.planning(clubId, from, to))
 }
 
@@ -80,7 +85,10 @@ export function getPlanning(
  * same short TTL, and shared between every member going to that class.
  */
 export function getClassEvent(client: Client, id: string): Promise<ClassEvent> {
-  return cached(`class_event:${id}`, PLANNING_TTL_MS, () => client.classEvent(id))
+  // Per member for the same reason as `getPlanning`: a Gladstone session
+  // carries the viewer's own booking state.
+  return cached(`class_event:${client.profile.contactId}:${id}`, PLANNING_TTL_MS, () =>
+    client.classEvent(id))
 }
 
 /**

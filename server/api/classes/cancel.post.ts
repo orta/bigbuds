@@ -13,7 +13,7 @@ import { clientFor, memberName, syncMember } from '../../utils/members'
 import { announce } from '../../utils/notices'
 import { today } from '#shared/naive'
 import { getDirectory, invalidatePlanning } from '../../utils/planning'
-import { activityName, classStart, isActive } from '../../utils/resamania'
+import { activityName, classStart, isActive } from '../../utils/gladstone'
 import { requireMember, requireSubject } from '../../utils/session'
 
 const Body = z.object({
