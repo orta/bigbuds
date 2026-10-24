@@ -15,7 +15,7 @@
 import { z } from 'zod'
 import { clientFor, memberName, syncMember } from '../../utils/members'
 import { announce } from '../../utils/notices'
-import { activityName, classStart, isQueued } from '../../utils/resamania'
+import { activityName, classStart, isQueued } from '../../utils/gladstone'
 import { getDirectory, invalidatePlanning } from '../../utils/planning'
 import { requireMember, requireSubject } from '../../utils/session'
 

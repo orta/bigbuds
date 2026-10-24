@@ -161,6 +161,12 @@ export interface Member {
   hiddenCategories: string[]
   /** Whether to drop classes that have already started from the timetable. */
   hideFinished: boolean
+  /**
+   * Whether to drop virtual (unstaffed, screen-played) classes from the
+   * timetable. A display preference like `hideFinished` — about a third of the
+   * club's classes are virtual, and plenty of members only want the live ones.
+   */
+  hideVirtual: boolean
 
   /**
    * The member's own notes, keyed by activity IRI.
@@ -267,6 +273,19 @@ async function load(): Promise<void> {
     const path = join(membersDir(), file)
     try {
       const member = JSON.parse(await readFile(path, 'utf8')) as Member
+
+      // Post-migration guard: this app moved from BigBox/Resamania (contact
+      // IRIs like `/bigbox/contacts/…`) to Gladstone (`/gs/contacts/…`). The
+      // old records cannot be used — their stored passwords are for a different
+      // club's API — and they would otherwise haunt the shared views as
+      // members with stale bookings who never sign in again. Skipped on load
+      // rather than deleted: the files stay on disk, recoverable, and simply
+      // stop being served.
+      if (!member.contactId?.startsWith('/gs/')) {
+        console.warn(`[store] Ignoring pre-Gladstone member record ${file} (${member.contactId})`)
+        continue
+      }
+
       store.members.set(member.contactId, withDefaults(member))
     } catch (error) {
       // One unreadable file must not take the whole app down: the member it
@@ -300,6 +319,7 @@ function withDefaults(member: Member): Member {
     bookableBy: member.bookableBy ?? [],
     hiddenCategories: member.hiddenCategories ?? [],
     hideFinished: member.hideFinished ?? false,
+    hideVirtual: member.hideVirtual ?? false,
     bookings: member.bookings ?? [],
     entries: member.entries ?? [],
     attended: member.attended ?? {},

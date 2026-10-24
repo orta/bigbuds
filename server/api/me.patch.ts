@@ -15,6 +15,7 @@ const Body = z.object({
   // then silently hide nothing forever.
   hiddenCategories: z.array(z.enum(CATEGORY_ORDER as [string, ...string[]])).optional(),
   hideFinished: z.boolean().optional(),
+  hideVirtual: z.boolean().optional(),
 })
 
 export default defineEventHandler(async event => {

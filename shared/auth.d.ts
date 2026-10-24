@@ -21,6 +21,8 @@ declare module '#auth-utils' {
     hiddenCategories: string[]
     /** Whether classes that have already started are dropped from the timetable. */
     hideFinished: boolean
+    /** Whether virtual (unstaffed) classes are dropped from the timetable. */
+    hideVirtual: boolean
   }
 }
 

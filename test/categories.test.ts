@@ -1,4 +1,4 @@
-/** Ported from the Rust `categories` tests. */
+/** Categorisation of the club's (Gladstone/KAL) class timetable. */
 
 import { describe, expect, it } from 'vitest'
 import { CATEGORIES, CATEGORY_ORDER, lookupClass, matchesQuery } from '#shared/categories'
@@ -6,46 +6,66 @@ import { CATEGORIES, CATEGORY_ORDER, lookupClass, matchesQuery } from '#shared/c
 describe('lookup', () => {
   it('uses the curated table for known classes', () => {
     expect(lookupClass('Body Pump').category).toBe('strength')
-    expect(lookupClass('HYROX').category).toBe('hiit')
+    expect(lookupClass('RPM').category).toBe('cycling')
+    expect(lookupClass('Body Combat').category).toBe('cardio')
     expect(lookupClass('Vinyasa Yoga').category).toBe('mindBody')
-    expect(lookupClass('EMS Session').category).toBe('ems')
+    expect(lookupClass('Aqua Fit').category).toBe('aqua')
   })
 
   it('is case- and whitespace-insensitive', () => {
     expect(lookupClass('  body pump  ').category).toBe('strength')
-    expect(lookupClass('AQUA PILATES').category).toBe('aqua')
+    expect(lookupClass('AQUA FIT').category).toBe('aqua')
   })
 
-  it('overrides the API\'s own miscategorisations', () => {
-    // The API files these under Dance and Aqua respectively.
-    expect(lookupClass('Beginners Hyrox').category).toBe('hiit')
+  it('sees through the club\'s messy spelling and spacing', () => {
+    // The same class turns up punctuated and spaced every which way.
+    expect(lookupClass('R P M').category).toBe('cycling')
+    expect(lookupClass('R.P.M').category).toBe('cycling')
+    expect(lookupClass('D E K A').category).toBe('hiit')
+    expect(lookupClass('D.E.K.A').category).toBe('hiit')
+  })
+
+  it('strips the recurring noise words before matching', () => {
+    // "Virtual", "Express" and a level are facts about the class, not the class.
+    expect(lookupClass('Virtual R P M Express').category).toBe('cycling')
+    expect(lookupClass('Virtual Body Pump').category).toBe('strength')
+    expect(lookupClass('Beginners Pilates').category).toBe('mindBody')
+    expect(lookupClass('Female Only Aqua Fit').category).toBe('aqua')
+  })
+
+  it('keeps the stripped-out facts as tags', () => {
+    expect(lookupClass('Virtual R P M').tags).toContain('virtual')
+    expect(lookupClass('Les Mills Tone').tags).toContain('les-mills')
+    expect(lookupClass('Female Only Pilates').tags).toContain('women-only')
+    expect(lookupClass('Body Combat Express').tags).toContain('express')
+  })
+
+  it('overrides the broad-brush reading of a name', () => {
+    // "Gold" makes it an over-50s class, not just Zumba.
     expect(lookupClass('Zumba Gold').category).toBe('over50s')
+    // "Aerotone" contains "tone" but is an aerobics class, not strength.
+    expect(lookupClass('Aerotone').category).toBe('cardio')
+    // "Next Steps for Cancer" contains "step" but is a gentle rehab class.
+    expect(lookupClass('Next Steps for Cancer').category).toBe('over50s')
   })
 
   it('guesses sensibly for classes added since the table was written', () => {
     expect(lookupClass('Aqua Blast').category).toBe('aqua')
-    expect(lookupClass('Advanced Hyrox Skills').category).toBe('hiit')
+    expect(lookupClass('Spin Express').category).toBe('cycling')
     expect(lookupClass('Restorative Yoga').category).toBe('mindBody')
-    expect(lookupClass('Kettlebell Induction').category).toBe('appointments')
+    expect(lookupClass('Gym Induction').category).toBe('appointments')
     // Nothing matched: lands in the broadest bucket rather than vanishing.
     expect(lookupClass('Something Entirely New').category).toBe('cardio')
-  })
-
-  it('checks the most specific keyword first', () => {
-    // Contains both "reformer" and "pilates"; reformer is the narrower answer.
-    expect(lookupClass('Reformer Flow').category).toBe('reformer')
-    // Contains "taster", which means an appointment whatever it is for.
-    expect(lookupClass('Reformer Taster').category).toBe('reformer')
   })
 })
 
 describe('search', () => {
   it('matches a goal word across differently-named classes', () => {
-    // The point of the tag table: "legs" should find more than the class
-    // with "legs" in its name.
+    // The point of the tag table: "legs" should find more than the class with
+    // "legs" in its name.
     expect(matchesQuery('Legs, Bums and Tums', 'legs')).toBe(true)
     expect(matchesQuery('Body Pump', 'legs')).toBe(true)
-    expect(matchesQuery('Spin', 'legs')).toBe(true)
+    expect(matchesQuery('RPM', 'legs')).toBe(true)
     expect(matchesQuery('Hatha Yoga', 'legs')).toBe(false)
   })
 
@@ -55,9 +75,15 @@ describe('search', () => {
     expect(matchesQuery('Body Pump', 'strength')).toBe(true)
   })
 
+  it('finds the virtual and Les Mills classes by those words', () => {
+    expect(matchesQuery('Virtual R P M', 'virtual')).toBe(true)
+    expect(matchesQuery('RPM', 'virtual')).toBe(false)
+    expect(matchesQuery('Body Pump', 'les mills')).toBe(true)
+  })
+
   it('narrows rather than widens on multiple words', () => {
     expect(matchesQuery('Beginners Pilates', 'beginner pilates')).toBe(true)
-    expect(matchesQuery('Advanced Reformer', 'beginner pilates')).toBe(false)
+    expect(matchesQuery('The Trip', 'beginner pilates')).toBe(false)
   })
 
   it('treats an empty query as matching everything', () => {

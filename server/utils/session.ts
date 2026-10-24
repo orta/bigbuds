@@ -72,5 +72,6 @@ export function sessionUser(member: Member) {
     bookableBy: member.bookableBy,
     hiddenCategories: member.hiddenCategories,
     hideFinished: member.hideFinished,
+    hideVirtual: member.hideVirtual,
   }
 }

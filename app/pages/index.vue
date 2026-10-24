@@ -19,6 +19,7 @@ const { user, fetch: refreshSession } = useUserSession()
  */
 const hiddenCategories = ref(new Set(user.value?.hiddenCategories ?? []))
 const hideFinished = ref(user.value?.hideFinished ?? false)
+const hideVirtual = ref(user.value?.hideVirtual ?? false)
 
 async function savePreferences() {
   try {
@@ -27,6 +28,7 @@ async function savePreferences() {
       body: {
         hiddenCategories: [...hiddenCategories.value],
         hideFinished: hideFinished.value,
+        hideVirtual: hideVirtual.value,
       },
     })
     await refreshSession()
@@ -53,6 +55,11 @@ function toggleFinished(hidden: boolean) {
   savePreferences()
 }
 
+function toggleVirtual(hidden: boolean) {
+  hideVirtual.value = hidden
+  savePreferences()
+}
+
 /** The filter menu, with a count of what each category holds today. */
 const filterItems = computed(() => [
   CATEGORY_ORDER.map((category: Category) => ({
@@ -66,6 +73,13 @@ const filterItems = computed(() => [
     onSelect: (payload: Event) => payload.preventDefault(),
   })),
   [{
+    label: 'Hide virtual classes',
+    icon: 'i-lucide-monitor-play',
+    type: 'checkbox' as const,
+    checked: hideVirtual.value,
+    onUpdateChecked: toggleVirtual,
+    onSelect: (payload: Event) => payload.preventDefault(),
+  }, {
     label: 'Hide classes that have finished',
     icon: 'i-lucide-history',
     type: 'checkbox' as const,
@@ -75,7 +89,8 @@ const filterItems = computed(() => [
   }],
 ])
 
-const hiddenCount = computed(() => hiddenCategories.value.size + (hideFinished.value ? 1 : 0))
+const hiddenCount = computed(() =>
+  hiddenCategories.value.size + (hideFinished.value ? 1 : 0) + (hideVirtual.value ? 1 : 0))
 
 /**
  * The days on offer, which are exactly the days the club will take a booking
@@ -125,7 +140,8 @@ const visible = computed(() =>
   entries.value.filter(entry =>
     matchesQuery(entry.name, query.value)
     && !hiddenCategories.value.has(entry.category)
-    && !(hideFinished.value && entry.finished)))
+    && !(hideFinished.value && entry.finished)
+    && !(hideVirtual.value && entry.tags.includes('virtual'))))
 
 /**
  * Classes grouped under the curated headings, empty categories dropped.

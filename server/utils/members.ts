@@ -16,17 +16,18 @@ import type { Visit } from '#shared/visits'
 import { toVisits, weekdayOf } from '#shared/visits'
 import { decrypt, encrypt } from './crypto'
 import { getDirectory } from './planning'
-import type { Attendee } from './resamania'
+import type { Attendee } from './gladstone'
 import {
   Client,
   activityName,
+  classActivityId,
   classEnd,
   classStart,
   coachName,
   isActive,
   isQueued,
   studioName,
-} from './resamania'
+} from './gladstone'
 import {
   type Attended,
   type Member,
@@ -115,6 +116,7 @@ export async function signIn(email: string, password: string): Promise<Member> {
     bookableBy: current?.bookableBy ?? [],
     hiddenCategories: current?.hiddenCategories ?? [],
     hideFinished: current?.hideFinished ?? false,
+    hideVirtual: current?.hideVirtual ?? false,
     bookings: current?.bookings ?? [],
     entries: current?.entries ?? [],
     attended: current?.attended ?? {},
@@ -317,7 +319,7 @@ export function buildAttended(attendees: Attendee[], now: string): Record<string
     const start = event ? classStart(event) : null
     if (!event || !start || start >= now) continue
 
-    const activity = event.activity
+    const activity = classActivityId(event)
     if (!activity) continue
 
     const existing = attended[activity]
@@ -352,7 +354,7 @@ export async function recordSyncFailure(contactId: string, message: string) {
 export function updateSettings(
   contactId: string,
   settings: Partial<
-    Pick<Member, 'visible' | 'shareEntries' | 'bookableBy' | 'hiddenCategories' | 'hideFinished'>
+    Pick<Member, 'visible' | 'shareEntries' | 'bookableBy' | 'hiddenCategories' | 'hideFinished' | 'hideVirtual'>
   >,
 ): Promise<Member> {
   return writeMember(contactId, current => {

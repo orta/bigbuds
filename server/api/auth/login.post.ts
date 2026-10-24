@@ -7,7 +7,7 @@
 
 import { z } from 'zod'
 import { signIn, syncMember } from '../../utils/members'
-import { ApiError } from '../../utils/resamania'
+import { ApiError } from '../../utils/gladstone'
 import { sessionUser } from '../../utils/session'
 
 const Body = z.object({
