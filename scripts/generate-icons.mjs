@@ -161,7 +161,7 @@ function badge(size = 96) {
  * The link-preview card.
  *
  * The one piece of this that is not an icon, and the reason it exists: the way
- * somebody joins BigBuds is a member sending them the link, so the link has to
+ * somebody joins KAL Pal is a member sending them the link, so the link has to
  * say what it is when it lands in a chat thread.
  */
 function socialCard() {
@@ -177,9 +177,9 @@ function socialCard() {
     <path d="${BOXES}"/>
   </g>
   <text x="288" y="262" fill="#fafafa" font-family="${label.family}"
-        font-size="104" font-weight="700" letter-spacing="-3">BigBuds</text>
+        font-size="104" font-weight="700" letter-spacing="-3">KAL Pal</text>
   <text x="126" y="392" fill="#a1a1aa" font-family="${label.family}" font-size="40">
-    Book BigBox classes, and see which of your
+    Book KAL classes, and see which of your
   </text>
   <text x="126" y="446" fill="#a1a1aa" font-family="${label.family}" font-size="40">
     gym buddies are going.

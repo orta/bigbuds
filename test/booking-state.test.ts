@@ -3,7 +3,7 @@
  *
  * Gladstone personalises each session with the viewer's own state inline
  * (`myBookingStatus`, `waitListPos`, `slotsAvailable`, `waitListCount`) rather
- * than listing everyone's attendee records the way Resamania did. These are the
+ * than listing everyone's attendee records the way Resamania, the first backend, did. These are the
  * helpers that turn that into the booked / queued / full / has-room answers the
  * timetable renders.
  */

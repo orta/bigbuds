@@ -1,5 +1,5 @@
 /**
- * Everything needs a BigBox login except the login page itself.
+ * Everything needs a KAL login except the login page itself.
  *
  * Global rather than per-page: this app has nothing to show a stranger, so
  * opting pages *out* is the safer default than remembering to opt each new one

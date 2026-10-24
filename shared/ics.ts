@@ -45,7 +45,7 @@ export interface CalendarEvent {
 }
 
 export interface CalendarOptions {
-  /** What the calendar is called once subscribed, e.g. `BigBuds — Sam`. */
+  /** What the calendar is called once subscribed, e.g. `KAL Pal — Sam`. */
   name: string
   events: CalendarEvent[]
   /** ISO instant for `DTSTAMP`. Injected so the output is testable. */
@@ -148,7 +148,7 @@ export function buildCalendar({ name, events, now }: CalendarOptions): string {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//BigBuds//Class bookings//EN',
+    'PRODID:-//KAL Pal//Class bookings//EN',
     'CALSCALE:GREGORIAN',
     // A feed, not an invitation: nothing here expects a reply.
     'METHOD:PUBLISH',

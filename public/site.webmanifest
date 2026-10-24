@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "BigBuds",
-  "short_name": "BigBuds",
-  "description": "Book BigBox classes, and see which of your gym buddies are going.",
+  "name": "KAL Pal",
+  "short_name": "KAL Pal",
+  "description": "Book KAL classes, and see which of your gym buddies are going.",
   "lang": "en-GB",
   "dir": "ltr",
   "start_url": "/",
@@ -27,7 +27,7 @@
     {
       "name": "People",
       "short_name": "People",
-      "description": "Everyone else using BigBuds",
+      "description": "Everyone else using KAL Pal",
       "url": "/people"
     }
   ]

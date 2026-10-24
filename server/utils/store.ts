@@ -33,7 +33,7 @@ import { join } from 'node:path'
 
 /** One class the member holds a place at. */
 export interface StoredBooking {
-  /** IRI, e.g. `/bigbox/class_events/1722803`. */
+  /** IRI, e.g. `/gs/sessions/80300672`. */
   classEventId: string
   /** `booked` or `queued` — a waiting-list place is not a promise to be there. */
   state: string
@@ -41,7 +41,7 @@ export interface StoredBooking {
   startedAt: string
 
   /**
-   * Enough of the class to describe it without asking BigBox again.
+   * Enough of the class to describe it without asking the club again.
    *
    * The snapshot began as three fields, which is all the shared timetable
    * needs: it already has the club's own copy of every class in front of it
@@ -59,6 +59,12 @@ export interface StoredBooking {
   endedAt?: string
   studio?: string | null
   coach?: string | null
+  /**
+   * Free places at the class when this was taken. Kept so the next sync can
+   * tell a waiting-list member that one has just opened — see
+   * `detectOpenings`. Absent on records written before that existed.
+   */
+  spaces?: number | null
 }
 
 /** A member's own note about a class type. */
@@ -115,16 +121,16 @@ export interface Attended {
 
 /** One badge scan at a door. */
 export interface StoredEntry {
-  /** IRI, e.g. `/bigbox/entries/38364921`. */
+  /** Id of the scan. Gladstone has no badge-scan feed, so none are collected at KAL. */
   id: string
   /** Naive timestamp of the scan, in the club's wall clock. */
   at: string
-  /** IRI of the door, e.g. `/bigbox/crossing_points/155`. */
+  /** Id of the door it was scanned at. */
   crossingPoint: string
 }
 
 export interface Member {
-  /** IRI, e.g. `/bigbox/contacts/2327536`. The identity everything hangs off. */
+  /** IRI, e.g. `/gs/contacts/8035356`. The identity everything hangs off. */
   contactId: string
   clubId: string
   email: string
@@ -145,7 +151,7 @@ export interface Member {
    * Contact IRIs of the members allowed to book this member onto classes, and
    * to undo it again.
    *
-   * A list rather than a flag: "anyone signed into BigBuds may book me" is not
+   * A list rather than a flag: "anyone signed into KAL Pal may book me" is not
    * a thing anyone wants, whereas "my wife may book me" is, and the difference
    * is somebody else's Saturday morning. Empty by default, so the feature does
    * not exist for a member until they name a person.
@@ -167,6 +173,18 @@ export interface Member {
    * club's classes are virtual, and plenty of members only want the live ones.
    */
   hideVirtual: boolean
+
+  /**
+   * Waiting-list places this member wants KAL Pal to book the moment a space
+   * opens, by class IRI.
+   *
+   * Per class rather than a setting, because KAL offers a freed space to the
+   * whole list at once and booking it is a commitment — to a class, and at
+   * some clubs to a no-show charge — that the member should make about a
+   * particular Tuesday, not about every queue they ever join. Pruned on each
+   * sync to places they are still waiting for.
+   */
+  autoAccept: string[]
 
   /**
    * The member's own notes, keyed by activity IRI.
@@ -200,7 +218,7 @@ export interface Member {
 
   /**
    * Set when the background sync could not sign in — almost always because
-   * they changed their BigBox password. Surfaced as a prompt to sign in again
+   * they changed their KAL password. Surfaced as a prompt to sign in again
    * rather than failing silently.
    */
   syncError: string | null
@@ -320,6 +338,7 @@ function withDefaults(member: Member): Member {
     hiddenCategories: member.hiddenCategories ?? [],
     hideFinished: member.hideFinished ?? false,
     hideVirtual: member.hideVirtual ?? false,
+    autoAccept: member.autoAccept ?? [],
     bookings: member.bookings ?? [],
     entries: member.entries ?? [],
     attended: member.attended ?? {},

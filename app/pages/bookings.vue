@@ -3,7 +3,7 @@ import { dayLabel } from '#shared/format'
 import { addDays, naiveDate, today as clubToday } from '#shared/naive'
 import type { ClassRow } from '#shared/types'
 
-useHead({ title: 'My classes · BigBuds' })
+useHead({ title: 'My classes · KAL Pal' })
 
 const toast = useToast()
 const today = clubToday()
@@ -67,7 +67,7 @@ async function cancel(entry: ClassRow) {
       My classes
     </h1>
     <p class="mb-5 text-sm text-muted">
-      Everything you are booked onto or waiting for, straight from BigBox.
+      Everything you are booked onto or waiting for, straight from KAL.
     </p>
 
     <div v-if="status === 'pending' && !entries.length" class="space-y-2">

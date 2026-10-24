@@ -17,9 +17,9 @@ import {
 } from '#shared/visits'
 
 const scan = (at: string, door = '155'): Scan => ({
-  id: `/bigbox/entries/${at}`,
+  id: `/gs/entries/${at}`,
   at,
-  crossingPoint: `/bigbox/crossing_points/${door}`,
+  crossingPoint: `/gs/doors/${door}`,
 })
 
 describe('grouping scans into visits', () => {

@@ -1,8 +1,8 @@
 /**
  * Web push, for the one thing the app knows and the member does not.
  *
- * The club promotes off its waiting lists silently. BigBuds notices, because
- * it is already signing in as everybody every fifteen minutes — but noticing
+ * The club promotes off its waiting lists silently. KAL Pal notices, because
+ * it is already signing in as everybody every two minutes — but noticing
  * is only useful if it can reach somebody who is not looking at the app, and
  * a browser tab that is closed cannot be told anything. That is what this is
  * for, and it is deliberately the *only* thing it is used for. An app that

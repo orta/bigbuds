@@ -1,5 +1,5 @@
 /**
- * BigBuds' service worker.
+ * KAL Pal's service worker.
  *
  * It exists for one reason: a push message can only be delivered to a service
  * worker, so there has to be one even though this app has nothing it wants to
@@ -38,7 +38,7 @@ self.addEventListener('push', event => {
     // Fall through to the defaults below.
   }
 
-  const title = payload.title || 'BigBuds'
+  const title = payload.title || 'KAL Pal'
   const options = {
     body: payload.body || 'Something changed with one of your classes.',
     icon: '/icon-192.png',

@@ -9,15 +9,17 @@ const member = (notes: Record<string, string>): Member => ({
 } as unknown as Member)
 
 describe('isActivityId', () => {
-  it('accepts the IRIs the club actually sends', () => {
-    expect(isActivityId('/bigbox/activities/2300')).toBe(true)
+  it('accepts the ids the app derives from class titles', () => {
+    expect(isActivityId('/gs/activities/strength-development')).toBe(true)
+    expect(isActivityId('/gs/activities/body-pump-45')).toBe(true)
   })
 
   it.each([
     ['a bare id', '2300'],
-    ['a different collection', '/bigbox/class_events/1722803'],
-    ['a traversal', '/bigbox/activities/../../etc/passwd'],
+    ['a different collection', '/gs/sessions/80300672'],
+    ['a traversal', '/gs/activities/../../etc/passwd'],
     ['a prototype key', '__proto__'],
+    ['a slug with capitals or spaces', '/gs/activities/Body Pump'],
     ['nothing at all', ''],
   ])('rejects %s', (_, value) => {
     expect(isActivityId(value)).toBe(false)
@@ -27,12 +29,12 @@ describe('isActivityId', () => {
 describe('noteCounts', () => {
   it('counts one note per member per class type', () => {
     const counts = noteCounts([
-      member({ '/bigbox/activities/1': 'Bring grip socks' }),
-      member({ '/bigbox/activities/1': 'Harder than it sounds' }),
-      member({ '/bigbox/activities/2': 'Lovely' }),
+      member({ '/gs/activities/body-pump': 'Bring grip socks' }),
+      member({ '/gs/activities/body-pump': 'Harder than it sounds' }),
+      member({ '/gs/activities/yoga': 'Lovely' }),
     ])
 
-    expect(counts).toEqual({ '/bigbox/activities/1': 2, '/bigbox/activities/2': 1 })
+    expect(counts).toEqual({ '/gs/activities/body-pump': 2, '/gs/activities/yoga': 1 })
   })
 
   it('has nothing to say about a class nobody has written about', () => {

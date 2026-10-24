@@ -1,7 +1,7 @@
 /**
- * Signs a member in with their BigBox credentials.
+ * Signs a member in with their KAL credentials.
  *
- * There is no separate registration: a BigBox membership is the account. A
+ * There is no separate registration: a KAL membership is the account. A
  * first login creates the row, later ones refresh the stored password.
  */
 
@@ -34,7 +34,7 @@ export default defineEventHandler(async event => {
     if (error instanceof ApiError && error.kind === 'invalid_credentials') {
       throw createError({
         statusCode: 401,
-        statusMessage: 'That email and password were not accepted by BigBox.',
+        statusMessage: 'That email and password were not accepted by KAL.',
       })
     }
     throw error

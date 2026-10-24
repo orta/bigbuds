@@ -1,6 +1,14 @@
 <script setup lang="ts">
 definePageMeta({ layout: false })
 
+/**
+ * KAL's own web portal, for checking a login before trusting it to us. The
+ * club's app and this portal both sit on the same Gladstone account, so a
+ * password that works there works here — and the portal is also where a
+ * forgotten one gets reset.
+ */
+const KAL_PORTAL = 'https://kal.gs-signature.cloud/Connect/mrmLogin.aspx'
+
 const { fetch: refreshSession } = useUserSession()
 const route = useRoute()
 
@@ -35,10 +43,10 @@ async function submit() {
       <div class="mb-8 text-center">
         <UIcon name="i-lucide-boxes" class="mx-auto mb-3 size-10 text-primary" />
         <h1 class="text-2xl font-semibold tracking-tight">
-          BigBuds
+          KAL Pal
         </h1>
         <p class="mt-1 text-sm text-muted">
-          Book BigBox classes, and see who else is going.
+          Book KAL classes, and see who else is going.
         </p>
       </div>
 
@@ -84,9 +92,20 @@ async function submit() {
       </UCard>
 
       <p class="mt-4 text-center text-xs text-muted">
-        Use your BigBox Leisure Club login — the same one as the club's own app.
+        Use your Kirklees Active Leisure login — the same one as the KAL app.
         We sign in on your behalf to book classes and to keep your schedule
         visible to other members.
+      </p>
+
+      <p class="mt-3 text-center text-xs text-muted">
+        Not sure of your details?
+        <a
+          :href="KAL_PORTAL"
+          target="_blank"
+          rel="noopener"
+          class="text-primary underline underline-offset-2"
+        >Try them on the KAL website</a>,
+        where you can also reset a forgotten password.
       </p>
     </div>
   </div>

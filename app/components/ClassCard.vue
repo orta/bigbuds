@@ -36,7 +36,7 @@ const places = computed(() => placesText(props.entry))
 /**
  * What the one button on this row should do.
  *
- * Booking and joining a waiting list are the same request to BigBox, but they
+ * Booking and joining a waiting list are the same request to KAL, but they
  * are not the same promise to the member, so they are never labelled the same.
  */
 const action = computed(() => {
@@ -147,6 +147,46 @@ function trigger() {
   if (!action.value) return
   if (action.value.event === 'cancel') emit('cancel', props.entry)
   else emit('book', props.entry)
+}
+
+/**
+ * Whether KAL Pal should book this waiting-list place the moment a space opens.
+ *
+ * Kept on the card rather than sent up to the page: it changes nothing else
+ * on screen, so a round trip through the page's refresh would only make the
+ * toggle feel slow. The next fetch of the row brings the stored answer back.
+ */
+const toast = useToast()
+const autoAccept = ref(props.entry.autoAccept)
+const savingAutoAccept = ref(false)
+watch(() => props.entry.autoAccept, value => (autoAccept.value = value))
+
+async function toggleAutoAccept() {
+  const on = !autoAccept.value
+  savingAutoAccept.value = true
+  try {
+    const result = await $fetch('/api/classes/auto-accept', {
+      method: 'PUT',
+      body: { classEventId: props.entry.id, on },
+    })
+    autoAccept.value = result.autoAccept
+    toast.add(on
+      ? {
+          title: `Auto-accept on for ${props.entry.name}`,
+          description: 'If a space opens, KAL Pal books it for you straight away.',
+          icon: 'i-lucide-zap',
+          color: 'success',
+        }
+      : { title: `Auto-accept off for ${props.entry.name}`, icon: 'i-lucide-zap-off', color: 'neutral' })
+  } catch (error) {
+    toast.add({
+      title: 'Could not change auto-accept',
+      description: (error as { statusMessage?: string }).statusMessage,
+      color: 'error',
+    })
+  } finally {
+    savingAutoAccept.value = false
+  }
 }
 
 const initials = (name: string) =>
@@ -294,6 +334,26 @@ const initials = (name: string) =>
           :aria-label="`Book someone else onto ${entry.name}`"
         />
       </UDropdownMenu>
+
+      <!-- Only on your own waiting-list places. A space at KAL goes to
+           whoever books first, so this is the difference between getting it
+           and reading about it. -->
+      <UTooltip
+        v-if="entry.queued && !entry.finished && !entry.isCancelled"
+        :text="autoAccept ? 'Auto-accept is on — KAL Pal will book a space as soon as one opens' : 'Auto-accept a space if one opens'"
+      >
+        <UButton
+          :icon="autoAccept ? 'i-lucide-zap' : 'i-lucide-zap-off'"
+          :label="autoAccept ? 'Auto-accept' : undefined"
+          :color="autoAccept ? 'primary' : 'neutral'"
+          :variant="autoAccept ? 'soft' : 'ghost'"
+          :loading="savingAutoAccept"
+          size="sm"
+          :aria-pressed="autoAccept"
+          :aria-label="`Auto-accept a space on ${entry.name}`"
+          @click="toggleAutoAccept"
+        />
+      </UTooltip>
 
       <UButton
         v-if="action"

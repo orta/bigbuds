@@ -42,7 +42,11 @@ function payload(notice: Notice) {
      * things happened to them.
      */
     tag: `${notice.kind}:${notice.classEventId}`,
-    url: `/bookings#${naiveDate(notice.startedAt)}`,
+    // A space is claimed from the timetable, not from the list of classes the
+    // member already holds.
+    url: notice.kind === 'space-available'
+      ? `/?date=${naiveDate(notice.startedAt)}`
+      : `/bookings#${naiveDate(notice.startedAt)}`,
   }
 }
 

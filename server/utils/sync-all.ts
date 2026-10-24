@@ -7,7 +7,8 @@
  * gets built, since the club's API only offers a short window of recent scans.
  */
 
-import { forgetClient, recordSyncFailure, syncMember } from './members'
+import { hasOpening } from '#shared/promotions'
+import { claimSpace, forgetClient, recordSyncFailure, syncMember } from './members'
 import { deliver } from './notices'
 import { readMember, readMembers } from './store'
 import { ApiError } from './gladstone'
@@ -32,7 +33,7 @@ export async function syncAllMembers(): Promise<SyncReport> {
   }
 
   // Sequential on purpose. This is the club's API, not ours, and a handful of
-  // members every quarter of an hour is not worth a burst of parallel logins.
+  // members every couple of minutes is not worth a burst of parallel logins.
   for (const member of everyone) {
     try {
       const { notices } = await syncMember(member)
@@ -56,18 +57,33 @@ export async function syncAllMembers(): Promise<SyncReport> {
        * over every member takes a while, and a device that subscribed during
        * it should still be told.
        */
-      for (const notice of notices) {
-        const fresh = await readMember(member.contactId)
-        if (!fresh) continue
+      const fresh = await readMember(member.contactId)
+      if (!fresh) continue
 
-        await deliver(fresh, notice)
-      }
+      /**
+       * Places the member asked to have taken for them, claimed before
+       * anybody is told anything — a space at KAL goes to whoever books
+       * first, and the club's email to the rest of the list is already out.
+       *
+       * Read off the current snapshot rather than off this run's notices, so
+       * a space first noticed by a sign-in or a booking (which announce
+       * nothing) is still claimed here.
+       */
+      const claims = fresh.bookings.filter(booking =>
+        hasOpening(booking) && fresh.autoAccept.includes(booking.classEventId))
+      const claimed = new Set(claims.map(booking => booking.classEventId))
+
+      const outgoing = notices.filter(notice => !claimed.has(notice.classEventId))
+      // One at a time: each claim writes this member's file.
+      for (const booking of claims) outgoing.push(await claimSpace(fresh, booking))
+
+      for (const notice of outgoing) await deliver(fresh, notice)
     } catch (error) {
       report.failed += 1
 
       const message
         = error instanceof ApiError && error.kind === 'invalid_credentials'
-          ? 'BigBox rejected the stored password — sign in again to reconnect.'
+          ? 'KAL rejected the stored password — sign in again to reconnect.'
           : error instanceof Error
             ? error.message
             : String(error)

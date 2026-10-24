@@ -7,7 +7,7 @@ import { syncAllMembers } from '../utils/sync-all'
 export default defineTask({
   meta: {
     name: 'sync',
-    description: "Refresh every member's bookings from BigBox",
+    description: "Refresh every member's bookings from KAL",
   },
   async run() {
     const report = await syncAllMembers()

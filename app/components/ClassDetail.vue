@@ -162,7 +162,7 @@ const initials = (name: string) =>
             </h3>
             <p class="mt-0.5 text-xs text-muted">
               What you wish you had known before your first one. Everyone signed
-              into BigBuds sees this against your name, on every
+              into KAL Pal sees this against your name, on every
               {{ entry.name }}.
             </p>
 

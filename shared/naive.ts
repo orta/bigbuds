@@ -1,9 +1,12 @@
 /**
  * Naive wall-clock times.
  *
- * The Resamania API sends timestamps as `"2026-08-14T06:30:00"` — no offset,
- * no zone. They are wall-clock times in the club's own timezone, and the Rust
- * client deliberately never converts them. This does the same.
+ * The app speaks timestamps as `"2026-08-14T06:30:00"` — no offset, no zone,
+ * wall-clock time in the club's own timezone. Gladstone sends Unix epochs, and
+ * `server/utils/gladstone.ts` turns them into these at the boundary; nothing
+ * past that point ever sees a `Date`. (The format is inherited from Resamania,
+ * the first backend, which sent naive strings natively — and it turned out to
+ * be the right shape to keep.)
  *
  * A naive timestamp is kept as its original string. That is not laziness: the
  * format is fixed-width and zero-padded, so lexicographic order *is*

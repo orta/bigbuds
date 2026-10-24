@@ -10,11 +10,11 @@
  * without a cookie, and the only revocation a URL can have is being replaced —
  * so resetting issues a new one and breaks every subscription to the old.
  *
- * **It is served from the snapshot, not from BigBox.** Calendar clients poll
+ * **It is served from the snapshot, not from KAL.** Calendar clients poll
  * on their own schedule and there are several of them per member — a phone, a
  * laptop, whatever Google does. Signing in as the member to answer each one
  * would put the club's API behind a load nobody is watching. The snapshot is
- * refreshed every fifteen minutes anyway, which is well inside how fresh a
+ * refreshed every two minutes anyway, which is well inside how fresh a
  * calendar needs to be.
  */
 
@@ -99,5 +99,5 @@ export function buildFeed(member: Member, now = naiveNow()): string {
   // Naive starts sort lexicographically, see `shared/naive.ts`.
   events.sort((a, b) => a.start.localeCompare(b.start))
 
-  return buildCalendar({ name: `BigBox — ${memberName(member)}`, events })
+  return buildCalendar({ name: `KAL — ${memberName(member)}`, events })
 }

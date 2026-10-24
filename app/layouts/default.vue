@@ -66,7 +66,7 @@ async function signOut() {
       <div class="mx-auto flex max-w-4xl items-center gap-2 px-4 py-3">
         <NuxtLink to="/" class="mr-auto flex items-center gap-2 font-semibold tracking-tight">
           <UIcon name="i-lucide-boxes" class="size-5 text-primary" />
-          BigBuds
+          KAL Pal
         </NuxtLink>
 
         <nav class="flex items-center gap-1">
@@ -112,14 +112,18 @@ async function signOut() {
           :key="notice.classEventId"
           :icon="notice.kind === 'cancelled-for-you' ? 'i-lucide-calendar-x'
             : notice.kind === 'booked-for-you' ? 'i-lucide-user-plus'
-              : 'i-lucide-party-popper'"
-          :color="notice.kind === 'cancelled-for-you' ? 'warning' : 'success'"
+              : notice.kind === 'space-available' ? 'i-lucide-ticket'
+                : 'i-lucide-party-popper'"
+          :color="notice.kind === 'cancelled-for-you' ? 'warning'
+            : notice.kind === 'space-available' ? 'info' : 'success'"
           variant="subtle"
           :title="notice.title"
           :description="notice.body"
           :actions="notice.kind === 'cancelled-for-you'
             ? [{ label: 'Find another', to: `/?date=${notice.startedAt.slice(0, 10)}`, color: 'neutral', variant: 'outline', size: 'xs' }]
-            : [{ label: 'See it with your other classes', to: '/bookings', color: 'neutral', variant: 'outline', size: 'xs' }]"
+            : notice.kind === 'space-available'
+              ? [{ label: 'Go to the class', to: `/?date=${notice.startedAt.slice(0, 10)}`, color: 'neutral', variant: 'outline', size: 'xs' }]
+              : [{ label: 'See it with your other classes', to: '/bookings', color: 'neutral', variant: 'outline', size: 'xs' }]"
           :close="{
             color: 'neutral',
             variant: 'ghost',

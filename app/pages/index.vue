@@ -5,7 +5,7 @@ import { bookableDays, lastBookableDate } from '#shared/booking'
 import { addDays, today as clubToday } from '#shared/naive'
 import type { BookingBuddy, ClassRow } from '#shared/types'
 
-useHead({ title: 'Timetable · BigBuds' })
+useHead({ title: 'Timetable · KAL Pal' })
 
 const toast = useToast()
 const { user, fetch: refreshSession } = useUserSession()
@@ -196,7 +196,9 @@ async function book(entry: ClassRow, subject?: BookingBuddy) {
             title: subject
               ? `${subject.name} is on the waiting list for ${entry.name}`
               : `On the waiting list for ${entry.name}`,
-            description: 'The club promotes automatically if a place frees up.',
+            description: subject
+              ? 'If a place frees up it goes to whoever books first.'
+              : 'A freed place goes to whoever books first — turn on auto-accept to have KAL Pal grab it.',
             color: 'warning',
             icon: 'i-lucide-hourglass',
           }
@@ -205,7 +207,7 @@ async function book(entry: ClassRow, subject?: BookingBuddy) {
               ? `Booked ${subject.name} onto ${entry.name}`
               : `Booked ${entry.name}`,
             description: subject
-              ? 'It is on their BigBox account, so they will see it there too.'
+              ? 'It is on their KAL account, so they will see it in the KAL app too.'
               : 'Other members can see you are going.',
             color: 'success',
             icon: 'i-lucide-check',
@@ -271,7 +273,7 @@ const describe = (error: unknown) =>
           {{ dayLabel(date) }}
         </h1>
         <p class="text-sm text-muted">
-          {{ data?.club ?? 'BigBox Leisure Club' }}
+          {{ data?.club ?? 'Kirklees Active Leisure' }}
           <template v-if="bookedCount">
             · you have {{ bookedCount }} on this day
           </template>
@@ -318,7 +320,7 @@ const describe = (error: unknown) =>
     <!-- Why the strip stops where it does, rather than leaving it to be
          discovered by a booking that fails. -->
     <p class="mb-4 mt-1.5 text-xs text-dimmed">
-      BigBox takes bookings up to {{ dayLabel(lastBookable) }}.
+      KAL takes bookings up to {{ dayLabel(lastBookable) }}.
     </p>
 
     <UInput

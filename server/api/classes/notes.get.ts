@@ -11,7 +11,7 @@ import { isActivityId, notesFor } from '../../utils/notes'
 import { requireMember } from '../../utils/session'
 
 const Query = z.object({
-  /** An activity IRI, e.g. `/bigbox/activities/2300`. */
+  /** An activity IRI, e.g. `/gs/activities/strength-development`. */
   activityId: z.string().refine(isActivityId, 'Not an activity'),
 })
 

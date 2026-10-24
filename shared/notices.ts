@@ -22,6 +22,11 @@ export type NoticeKind
   | 'booked-for-you'
   /** …or took them off one. */
   | 'cancelled-for-you'
+  /**
+   * A place opened at a class they are waiting for. The club offers it to the
+   * whole list at once, so this is a prompt to go and book, not a booking.
+   */
+  | 'space-available'
 
 export interface Notice {
   kind: NoticeKind
@@ -31,7 +36,7 @@ export interface Notice {
   /** Naive start of the class. */
   startedAt: Naive
   /**
-   * Who did it. Absent for `promoted`, which nobody did — the club's
+   * Who did it. Absent for `promoted` and `space-available`, which nobody did — the club's
    * automation is not a person and saying "the club" would suggest somebody
    * there made a decision about this member.
    */
@@ -114,6 +119,11 @@ export function noticeSentence(notice: Notice, when: string): { title: string, b
       return {
         title: `${notice.by} cancelled a class for you`,
         body: `${notice.name}, ${when}.`,
+      }
+    case 'space-available':
+      return {
+        title: `A space opened — ${notice.name}`,
+        body: `${when}. It goes to whoever books first.`,
       }
   }
 }

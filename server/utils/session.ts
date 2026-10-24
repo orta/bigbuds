@@ -2,7 +2,7 @@
  * Session helpers.
  *
  * The session cookie holds display fields and the contact IRI. The member's
- * real BigBox session lives server-side in the client cache, keyed off the
+ * live Gladstone client lives server-side in the client cache, keyed off the
  * record this looks up.
  */
 

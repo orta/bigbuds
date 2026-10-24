@@ -1,41 +1,48 @@
-# BigBuds
+# KAL Pal
 
-A web app for booking classes at [BigBox Leisure Club][bigbox], built on the same Resamania
-member API that powers the club's own web app — and on the same API client as
-[BigBox for COSMIC][cosmic-app], ported to TypeScript.
+A web app for booking classes at [Kirklees Active Leisure][kal] (KAL), built on the Gladstone
+booking API that sits behind the club's own KAL app.
 
-The difference from both is who else you can see. BigBox has no concept of following another
-member, so the desktop app's "friends" feature works by storing a friend's *login* and signing
-in as them. Here, everyone signs in for themselves, their bookings are snapshotted, and the
+The difference from the club's app is who else you can see. KAL has no concept of following
+another member. Here, everyone signs in for themselves, their bookings are snapshotted, and the
 timetable shows who else is going. Nobody ever holds anybody else's credentials.
+
+It began life as BigBuds, a web port of [BigBox for COSMIC][cosmic-app] for BigBox Leisure Club,
+which runs on a different booking system (Resamania). When the gym changed, the API client was
+replaced and almost nothing above it had to move — see [The API client](#the-api-client).
 
 ## Features
 
-**Planning.** The club's timetable for every day the club will take a booking on — which is today
-plus eight, not the fortnight this offered to begin with: BigBox refuses anything further out, and
-a day picker that runs past that only offers classes whose Book button is going to fail. Grouped
-into curated categories — Strength & Weights, HIIT & Conditioning, Mind & Body, Reformer, EMS and
-so on — each with a one-line explainer, because "EMS" and "Reformer" tell you nothing useful about
-what you would actually be doing. Toggle to **By time** for a flat chronological list instead.
+**Planning.** The club's timetable for every day the club will take a booking on — today plus
+eight, because a day picker that runs past the booking window only offers classes whose Book
+button is going to fail. (That window was measured at BigBox and is in
+[`shared/booking.ts`](./shared/booking.ts); it has not yet been re-checked against KAL.) Grouped
+into curated categories — Indoor Cycling, Strength & Weights, HIIT & Conditioning, Mind & Body,
+Aqua, Gentle & Over 50s and so on — each with a one-line explainer, because "R P M" and "Sh'bam"
+tell you nothing useful about what you would actually be doing. Toggle to **By time** for a flat
+chronological list instead.
 
-**Filters that stick.** Hide categories you never book — the kids' sessions, the inductions — and
-optionally drop classes that have already started. Both are per-member and apply to the
-chronological view as well as the grouped one.
+**Filters that stick.** Hide categories you never book — the kids' sessions, the inductions —
+and optionally drop classes that have already started, or the virtual (screen-played) ones, which
+are about a third of the timetable. All per-member, and they apply to the chronological view as
+well as the grouped one.
 
 **Classes you know.** A class type you have been to before is marked with how many times, so a
 timetable of sixty-odd classes distinguishes the ones you already like from the ones you have
-never tried. Built from your BigBox booking history, keyed on the club's activity id so a renamed
-class does not read as new.
+never tried. Keyed on the class's name rather than on one session. Gladstone offers no booking
+history to build this from, so the count starts at zero and grows from the classes KAL Pal sees
+you booked onto.
 
 **Who is usually around.** On the *By time* view, a class whose start falls inside somebody's
 usual hours on that weekday carries a right-aligned marker; hovering it names them and their
 window. This is a weaker signal than a booking and is presented as one — they are not going to
-that class, they simply tend to be at the club around then.
+that class, they simply tend to be at the club around then. *Dormant at KAL:* it is built from
+badge scans at the doors, and Gladstone does not expose those — see [Gym visits](#gym-visits).
 
 **Search by what you want from a session**, not just the class name: `legs`, `strength`,
 `weights`, `core`, `beginner`, `low-impact`. Every class carries hand-written tags, so `legs`
-finds Body Pump and Spin as well as Legs, Bums and Tums. Multi-word queries narrow rather than
-widen — `beginner pilates` will not match Advanced Reformer.
+finds Body Pump and Strength Development as well as Legs, Bums and Tums. Multi-word queries
+narrow rather than widen — `beginner pilates` will not match a plain Pilates class.
 
 **What a class actually is.** Clicking a class name opens the club's own description of it —
 which is in the API, and which the timetable has nowhere to put — along with its tags, how many
@@ -52,15 +59,21 @@ to the class *type* rather than to one Tuesday's instance, so writing one is wor
 **Booking and waiting lists.** Book and cancel in a click. A full class shows how many people are
 already waiting — `Full · 6 waiting` — because that, rather than the fact it is full, is what
 tells you whether joining the list is worth it. Once you are on it, your place is shown in
-context as `#2 of 6`. The club auto-promotes, so you move up without doing anything if a spot
-frees.
+context as `#2 of 6`.
 
-**And it tells you when that happens.** The club promotes silently, so the one thing a member most
-wants to know — *you are in* — is the one thing they can only find out by opening an app and
-looking. BigBuds is already signing in as everybody every fifteen minutes, and already working out
-each booking's state in order to store it, so noticing costs nothing: a place that was `queued`
-last time and is `booked` now is a promotion. It arrives as a push notification if the member has
-turned them on, and as a banner in the app if they have not — see [Notices](#notices).
+**And it tells you when a space opens.** KAL does not promote off its waiting lists. When somebody
+cancels, it emails *everybody* on the list that a space has come up and gives it to whoever books
+first — and in practice it is gone within minutes. KAL Pal is already signing in as everybody
+every two minutes, and already working out each booking's state in order to store it, so noticing
+costs nothing: a place that is still `queued` at a class that had no free spaces last time and has
+one now is news. It arrives as a push notification if the member has turned them on, and as a
+banner in the app if they have not — see [Notices](#notices).
+
+**Or it books the space for you.** Each of your waiting-list places has an **Auto-accept** toggle.
+With it on, the sync that sees a space open books it before telling you anything, and the alert
+you get is *you are in* instead. One attempt per opt-in: if the booking is refused, the opt-in is
+dropped and you get the ordinary "a space opened" alert, so a refusal is never re-sent to the club
+every two minutes.
 
 **And when somebody else books you.** The same two channels for the other thing that happens to a
 member's schedule without them: being put into a class, or taken out of one, by somebody they gave
@@ -70,7 +83,7 @@ going.
 
 **Your classes in your calendar.** A private, subscribable link that puts what you have booked
 alongside everything else you have on. It keeps itself current: bookings made in the club's own
-app appear within about fifteen minutes, and cancelling anywhere removes them. Waiting-list places
+app appear within a few minutes, and cancelling anywhere removes them. Waiting-list places
 go in as tentative events titled *Waiting list · Body Pump*, which is the calendar's version of
 the dimmed avatars on the timetable.
 
@@ -78,16 +91,16 @@ the dimmed avatars on the timetable.
 one partner, a training buddy, whoever they choose — from the switch beside that person's name on
 the People page. Those classes then carry a second control on the timetable: *Book Wanda in*,
 *Put Wanda on the list*, or *Cancel for Wanda* when she already has the place. The booking is made
-through her own BigBox account, by the same stored credentials the background sync uses, so the
+through her own KAL account, by the same stored credentials the background sync uses, so the
 club sees a booking she made herself and it turns up in her own app.
 
 Nobody has this by default, and it is a list of named people rather than a switch, because "anyone
-signed into BigBuds may book me" is not something anyone wants. The grant is one-directional —
+signed into KAL Pal may book me" is not something anyone wants. The grant is one-directional —
 letting your wife book you does not let you book her — it covers cancelling as well as booking, so
 a mistake can be undone by whoever made it, and it is withdrawn from either the People page or
 Settings, where everyone holding it is listed by name.
 
-**Everyone else.** Any other member signed into BigBuds shows up against the classes they are
+**Everyone else.** Any other member signed into KAL Pal shows up against the classes they are
 booked onto, as an avatar row on the timetable. Waiting-list places are shown dimmed, because
 they are not a promise to be there. Visibility is a single switch in Settings — on by default,
 and turning it off removes you from everyone's grid immediately while still letting you see
@@ -98,7 +111,7 @@ whole without them looking bookable.
 
 ## How the shared view works
 
-BigBox is the source of truth for the timetable and for who is booked onto what. This app's own
+KAL is the source of truth for the timetable and for who is booked onto what. This app's own
 store holds only the things the club's API has no concept of: that a member has joined *this*
 app, a snapshot of their upcoming bookings, a rolling week of their gym visits, and the handful of
 things members have added themselves — their notes, their calendar link, the devices they want
@@ -108,15 +121,15 @@ Members' bookings are refreshed three ways, so the shared view stays close to li
 
 - when they sign in,
 - immediately after they book or cancel here,
-- and every 15 minutes by a scheduled task, for bookings made in the club's own app.
+- and every 2 minutes by a scheduled task, for bookings made in the club's own app.
 
 That last one is why the app stores credentials — see below.
 
-**Gym hours.** The club's access control records a row per badge scan at a door, and those are
-accumulated into a rolling week so the People page can say roughly when somebody trains. This has
-its own switch, separate from class visibility, because wanting your classes public and your
-comings and goings private is an entirely reasonable position. Turning it off deletes what was
-collected rather than hiding it.
+**Gym hours.** Where the club's API offers badge scans, they are accumulated into a rolling week
+so the People page can say roughly when somebody trains. This has its own switch, separate from
+class visibility, because wanting your classes public and your comings and goings private is an
+entirely reasonable position. Turning it off deletes what was collected rather than hiding it. At
+KAL there is nothing to collect yet — see [Gym visits](#gym-visits).
 
 ## Storage
 
@@ -137,20 +150,20 @@ The trade is that it does not survive running on two machines at once, which is 
 
 ## A note on credentials
 
-BigBuds stores each member's BigBox password, encrypted with AES-256-GCM, and the key lives only
-in `BIGBUDS_ENCRYPTION_KEY` rather than in the database.
+KAL Pal stores each member's KAL password, encrypted with AES-256-GCM, and the key lives only in
+`BIGBUDS_ENCRYPTION_KEY` rather than in the store.
 
-This is a real liability and it is worth being clear about why it exists. The Resamania API's
-refresh tokens rotate on every use and expire in an hour, so there is nothing that can carry a
-member across a nightly job. Without the password, a member who books in the club's own app and
-does not open BigBuds for a week is stale to everyone else for that week — which is most of the
-value of the app gone.
+This is a real liability and it is worth being clear about why it exists. Gladstone has no token
+to hold: it takes the member's email and password as headers on *every* request. Without the
+password, a member who books in the club's own app and does not open KAL Pal for a week is stale to
+everyone else for that week — which is most of the value of the app gone — and auto-accept could
+not exist at all.
 
 The trade is deliberate rather than incidental:
 
 - Passwords are never in the session cookie. That holds an id and display fields only; the live
-  BigBox session lives server-side, keyed off the database row.
-- The encryption key is separate from the database, so a leaked dump alone is not enough.
+  Gladstone client lives server-side, keyed off the member's record.
+- The encryption key is separate from the store, so a leaked copy of the data alone is not enough.
 - GCM is authenticated, so a tampered ciphertext fails to decrypt rather than decrypting to
   something chosen by whoever tampered with it.
 - Changing your password at the club breaks the background sync rather than silently working —
@@ -158,54 +171,58 @@ The trade is deliberate rather than incidental:
 
 If you would rather not hold passwords at all, the sync can be cut back to sign-in and
 post-booking only: drop `server/tasks/sync.ts` and store nothing but the session. Members then
-appear to each other as of their last visit.
+appear to each other as of their last visit, and nobody gets waiting-list alerts.
 
 ## The API client
 
-[`server/utils/resamania.ts`](./server/utils/resamania.ts) is a port of `src/api.rs` from the
-COSMIC app. A few things about the API shaped it, and are worth knowing before changing it:
+[`server/utils/gladstone.ts`](./server/utils/gladstone.ts) talks to Gladstone, the booking engine
+behind the KAL app, at `kal.gs-signature.cloud/AWS`. The KAL app itself is an Innovatise
+"MyFitApp" white-label shell; that layer only serves the app its config and home screen, so this
+ignores it and goes straight to Gladstone. Nothing here is documented — it was worked out from the
+app.
 
-- **Auth is an OAuth2 password grant** against `/{client_token}/oauth/v2/token`. The client id
-  and secret are not secrets — they are compiled into the member web app's public JavaScript
-  bundle and identify the application, not the user.
-- **Entities reference each other by IRI**, not id — a class names its activity as
-  `"/bigbox/activities/2300"`. Turning those into names needs the lookup tables that
-  `directory()` fetches.
-- **Timestamps are naive** (`"2026-08-14T06:30:00"`, no offset) and are wall-clock times in the
-  club's timezone. See below.
-- **Joining a waiting list is the same request as booking.** The POST body is identical; the
-  server returns `state: "queued"` instead of `"booked"` when the seats are gone. So the UI
-  reads the response rather than assuming a seat.
-- **A booking embeds a thinner class than the planning grid does** — no capacity counters and no
-  attendee lists. So `GET /api/bookings` re-fetches each class in full, otherwise the queue behind
-  your own waiting-list place would be invisible on the one page that most needs to show it. Those
-  fetches are cached and shared between members going to the same class.
-- **Query values keep their literal slashes.** Nearly every filter value is an IRI, and
-  `URLSearchParams` escapes the slashes to `%2F` — which the `entries` collection's authorisation
-  check rejects with a 403, while the byte-identical request with literal slashes returns 200.
-  Whatever that check matches on, it reads the raw query string. `/` is legal in a query per RFC
-  3986 and every other collection accepts both forms, so the client un-escapes slashes everywhere
-  rather than special-casing one endpoint.
-- **`myBookings()` returns your entire history**, including classes attended months ago — those
-  attendee records are never cleaned up. Use `bookingsFrom(date)` unless you want the history,
-  which the attendance tracking does — and because it is many pages for a long-standing member, it
-  is rebuilt daily rather than on every fifteen-minute sync. The answer only changes when a booked
-  class passes.
-- **Cancelling is a state transition**, not a delete: `POST /attendees/{id}/transitions`. The
-  record survives with a `cancelled` state, which is why a cancelled booking still turns up in
-  `bookedAttendees` and has to be filtered on `isActive`.
+It deliberately keeps the *shape* of the Resamania client it replaced: the same `Client` methods,
+the same `ClassEvent` / `Attendee` / `PlanningEntry` types, the same helper functions. That is why
+the move between gyms touched one file and a few import lines rather than the whole app. Two facts
+about Gladstone are absorbed at that boundary:
 
-Two things were added that the desktop client has no need for. The directory and planning grid
-are cached process-wide rather than per-member, since every member at the club is asking for the
-same bytes — safe only because neither response is personalised, which is why "am I booked" is
-computed from the embedded attendee lists afterwards rather than requested per-user. And
-`POST /api/classes/cancel` re-reads the member's own bookings before acting, because the attendee
-IRI arrives from the browser and would otherwise cancel any booking at the club given its id.
+- **Timestamps are Unix epoch seconds.** Everything above the client speaks naive Europe/London
+  wall-clock strings (see [Wall-clock times](#wall-clock-times)), so epochs are converted on the
+  way out and back on the way in, and nothing downstream sees a `Date`.
+- **Ids are bare strings.** The rest of the app keys everything by IRI, down to the store's
+  filenames, so Gladstone ids are wrapped as `/gs/contacts/…`, `/gs/sessions/…`, `/gs/sites/…`
+  and unwrapped again before they go back. A class *type* has no id at all, so notes and
+  attendance are keyed on a slug of the class title, `/gs/activities/strength-development`.
+
+And a few things worth knowing before changing it:
+
+- **Auth is a fixed application key plus the member's credentials, per request.** Every call sends
+  `AuthenticationKey` (the app's key, delivered to the KAL app in cleartext — it identifies the
+  application, not the user) and the member's `user` and `pw` headers. The `tokenValue` the login
+  call returns does not authenticate anything else.
+- **The timetable is personalised.** Each session carries the viewer's own booking state, waiting
+  list place and capacity inline. That is convenient — "am I booked" comes for free — but it means
+  the planning cache is keyed per member, because a grid cached for one member would show another
+  somebody else's bookings.
+- **"My bookings" is read off the timetable.** `/api/booking/list` exists but yields no session id
+  to cancel by, so `bookingsFrom` reads the next four weeks of timetable and keeps what the member
+  holds. That is also why attendance cannot be rebuilt from history.
+- **The timetable is drawn from one activity scope**, `FITC` (fitness classes), filtered to the
+  member's home site. `KAL_SCOPE_IDS` overrides it.
+- **Booking and joining a waiting list are the same request.** `/api/Book` decides based on space,
+  so the client re-reads the session afterwards and reports what actually happened. Cancelling and
+  leaving a list are likewise one call, `/api/Cancel`.
+
+`POST /api/classes/cancel` re-reads the member's own bookings before acting, because the id
+arrives from the browser and would otherwise cancel any booking at the club given its id.
 
 ## Gym visits
 
-`GET /bigbox/entries` returns badge scans: a timestamp, a door, and nothing saying which way the
-member was walking. Three things about it shaped `shared/visits.ts`:
+**Not available at KAL.** Gladstone has no badge-scan feed, so `client.entries()` returns nothing,
+the People page shows no visits, and "who is usually around" stays empty. The code is kept because
+it is self-contained and still correct; what follows is what was learned from BigBox's
+`/bigbox/entries`, which returned a timestamp, a door, and nothing saying which way the member was
+walking. Three things about it shaped `shared/visits.ts`:
 
 - **You can only ever read your own.** The `targetId` filter's *value* is ignored — passing
   another member's contact IRI, or a nonexistent one, still returns your own records. A bare
@@ -264,9 +281,9 @@ breaks every subscription to the old. Settings says as much in those words.
 
 Three things about it are worth knowing before changing it:
 
-- **It is served from the snapshot, not from BigBox.** Calendar clients poll on their own
+- **It is served from the snapshot, not from KAL.** Calendar clients poll on their own
   schedule and there are several per member. Signing in as somebody to answer each poll would put
-  the club's API under a load nobody is watching. The snapshot is refreshed every fifteen minutes
+  the club's API under a load nobody is watching. The snapshot is refreshed every two minutes
   anyway, which is well inside how fresh a calendar needs to be.
 - **Which is why a stored booking now carries its name.** The snapshot began as three fields,
   which is all the shared timetable needs — it already has the club's copy of every class in front
@@ -295,26 +312,34 @@ silently truncate the rest of the member's calendar.
 
 ## Notices
 
-The club promotes off its waiting lists automatically and tells nobody, which makes it the single
-thing this app is best placed to say. [`shared/promotions.ts`](./shared/promotions.ts) is the
-whole of the detection: a booking that was `queued` in the previous snapshot and is `booked` in
-this one. Three transitions look similar and only that one is news — *absent → booked* is somebody
-pressing Book, and *absent → queued* is somebody joining a list; they both know already.
+Two kinds of news come out of comparing one sync's snapshot with the last, and both live in
+[`shared/promotions.ts`](./shared/promotions.ts):
 
-A class that has already started is left out. The sync fetches from the club's midnight, so a
-07:00 run still sees this morning's 06:30, and being told at 07:00 that a place opened up at 06:25
-is worse than being told nothing.
+- **`space-available`** is the one that matters at KAL. A booking that is still `queued`, at a
+  class that had no free places last time and has one now. Only the edge counts: a space that stays
+  open is announced once, and one that closes and opens again is announced again, which is what the
+  club's own email does. A snapshot from before free places were stored counts as unknown rather
+  than full, so the first sync after an upgrade does not announce every open class at once. The
+  banner clears itself once the space has gone or the member is no longer on the list, so it never
+  sends anybody to a class that is full again.
+- **`promoted`**: a booking that was `queued` and is now `booked`. BigBox did this automatically;
+  KAL does not, so at KAL this is what auto-accept produces. Three transitions look similar and only
+  that one is news — *absent → booked* is somebody pressing Book, and *absent → queued* is somebody
+  joining a list; they both know already.
 
-One case it deliberately cannot tell apart: a member who leaves a waiting list and books a seat
-outright between two syncs looks exactly like a promotion, because in the snapshot it *is*
-queued-then-booked. Distinguishing them would mean recording every action the app takes and every
-one it does not — the club's own app can do this too — to suppress a message whose worst case is
-telling somebody something they already knew.
+A class that has already started is left out of both. The sync fetches from the club's midnight,
+so a 07:00 run still sees this morning's 06:30, and being told at 07:00 that a place opened up at
+06:25 is worse than being told nothing.
 
-It is announced twice, and both halves matter:
+**Auto-accept** happens in the scheduled sync, before anybody is told anything, and reads the
+current snapshot rather than this run's notices — so a space first noticed by a sign-in or a
+booking, which announce nothing, is still claimed. A claimed place updates the snapshot in the same
+write, so the next sync does not see *queued → booked* and announce it a second time.
+
+Every notice is announced twice, and both halves matter:
 
 - **A push notification**, sent only from the scheduled sync. `syncMember` also runs on sign-in
-  and straight after a booking, and a promotion detected on either of those is one the member is
+  and straight after a booking, and a change detected on either of those is one the member is
   already looking at. The scheduled run is the path where nobody is looking, which is the whole
   reason to interrupt them.
 - **A banner in the app**, from a record kept against the member, dismissed by hand rather than by
@@ -324,13 +349,13 @@ It is announced twice, and both halves matter:
   exists to give them. The record is dropped once the class starts, seen or not, which is also
   what stops the list growing without a bound anyone chose.
 
-### The other two kinds
+### Booked and cancelled for you
 
 [`shared/notices.ts`](./shared/notices.ts) is the closed list, and it is closed on purpose: every
 one of these interrupts somebody, so adding a kind should mean writing the sentence in that file
 and arguing that it earns the interruption.
 
-Alongside `promoted` there are `booked-for-you` and `cancelled-for-you`, which arrive from the
+Alongside those two there are `booked-for-you` and `cancelled-for-you`, which arrive from the
 opposite direction. There is nothing to detect — the request that did it is right there in
 [`book.post.ts`](./server/api/classes/book.post.ts) — so the endpoint records and sends the notice
 itself rather than waiting for a sync to notice. They fire only when the subject is not the person
@@ -346,10 +371,10 @@ Two details:
   been booked or cancelled at the club. Reporting that as failed because a push service was slow
   is how somebody books the same class twice.
 
-`promoted` is the one kind with nobody's name on it. The club's automation is not a person, and
-saying "the club booked you in" would suggest somebody there made a decision about this member.
+`promoted` and `space-available` have nobody's name on them. Neither is a person's decision about
+this member, and saying "the club booked you in" would suggest it was.
 
-The settings copy names both things and says nothing else is ever sent — no "a friend booked
+The settings copy names these things and says nothing else is ever sent — no "a friend booked
 something", no reminders about classes you booked yourself. That promise is the feature; keeping
 it is what stops the switch being turned off.
 
@@ -379,8 +404,10 @@ events.
 
 ## Wall-clock times
 
-[`shared/naive.ts`](./shared/naive.ts) keeps the API's timestamps as strings and never turns them
-into a `Date`. The format is fixed-width and zero-padded, so lexicographic order *is*
+[`shared/naive.ts`](./shared/naive.ts) keeps timestamps as naive Europe/London strings and never
+turns them into a `Date`. Gladstone sends epochs, which the client converts at the boundary; the
+string format is inherited from Resamania, which sent it natively, and turned out to be the right
+thing to keep. The format is fixed-width and zero-padded, so lexicographic order *is*
 chronological order and comparisons need no parsing at all.
 
 This matters more than it looks. A naive London time passed through `new Date()` is reinterpreted
@@ -391,19 +418,24 @@ date for exactly this reason.
 
 ## Class categories
 
-BigBox's API does expose its own `activity_groups`, but they are too coarse to browse by and
-wrong in places — it files "Beginners Hyrox" under *Dance* and "Zumba Gold" under *Aqua*. So the
-categories and tags live in [`shared/categories.ts`](./shared/categories.ts), hand-curated from
-each class's own description in the API and covering all 66 classes the club currently runs.
+Gladstone files nearly the whole timetable under one activity group, `FITC` (fitness classes),
+which is no use to browse by. So the categories and tags live in
+[`shared/categories.ts`](./shared/categories.ts), hand-curated for KAL — a Les Mills–heavy
+programme across nine sites — and checked against all 127 class titles the club was running when
+it was written.
 
-If the club adds a class that is not in that table, it falls back to keyword matching on the name,
-so new classes still land somewhere sensible rather than disappearing.
+The club's names are messy: the same class turns up as `R P M`, `Rpm`, `R.P.M` and
+`Virtual R P M Express`. So matching strips the recurring noise words (`virtual`, `les mills`,
+`express`, `beginners`, `female only`, …) and the punctuation before looking a class up, and adds
+the stripped facts back as tags so they stay searchable. A class that is not in the table falls
+back to keyword matching on the name, so new classes still land somewhere sensible rather than
+disappearing.
 
 ## App icon and metadata
 
-The mark is Lucide's `boxes` — the same glyph the header uses as the logo, so the tab icon and the
-thing at the top of the page are one drawing rather than two that resemble each other — in
-lime-500 on the app's near-black, with the corner radius plates iOS and Android expect.
+The mark is Lucide's `boxes`, kept from the BigBox days — the same glyph the header uses as the
+logo, so the tab icon and the thing at the top of the page are one drawing rather than two that
+resemble each other — in lime-500 on the app's near-black, with the corner radius plates iOS and Android expect.
 
 [`scripts/generate-icons.mjs`](./scripts/generate-icons.mjs) draws all of it and writes the
 outputs into `public/`; `yarn icons` regenerates them. They are committed, so nothing runs this at
@@ -421,7 +453,7 @@ build or deploy time. Two decisions in there are worth knowing about:
 `public/site.webmanifest` makes it installable: standalone display, the club's colours for the
 splash, a maskable icon for Android launchers, and shortcuts straight to *My classes* and
 *People*. `nuxt.config.ts` carries the head links, a `theme-color` per colour scheme so the
-browser chrome matches the page, and the Open Graph tags — the way anybody joins BigBuds is a
+browser chrome matches the page, and the Open Graph tags — the way anybody joins KAL Pal is a
 member sending them the link, so the link is worth a card. Its absolute URLs come from the request
 in `app/app.vue` rather than a configured domain, which would be wrong the first time the
 deployment moved.
@@ -451,8 +483,9 @@ yarn dev
 
 Data lands in `./.data` unless `BIGBUDS_DATA_DIR` says otherwise.
 
-Sign in with a real BigBox membership — there is no separate registration, because the membership
-*is* the account.
+Sign in with a real KAL membership — there is no separate registration, because the membership
+*is* the account. If a login is refused, try it on [KAL's own website][kal-portal] first; the login
+screen links there too.
 
 | Command | |
 | --- | --- |
@@ -464,11 +497,12 @@ Sign in with a real BigBox membership — there is no separate registration, bec
 
 The tests cover the category table, search matching, the capacity and booking-state logic in the
 API client, the wall-clock arithmetic across both DST transitions, grouping badge scans into
-visits — pinned against scans the club actually produced — which snapshot transitions count as a
-waiting-list promotion, how notices collapse and expire, the wording of each kind, the conversion
-of records written before notices had kinds, and the iCalendar output, down to the octet-counted line folding and the
-escaping that stops a newline in a note truncating somebody's calendar. They are all pure
-functions — nothing in the suite talks to BigBox.
+visits, which snapshot changes count as a promotion or an opened space, how notices collapse and
+expire, the wording of each kind, the conversion of records written before notices had kinds, and
+the iCalendar output, down to the octet-counted line folding and the escaping that stops a newline
+in a note truncating somebody's calendar. They are all pure functions — nothing in the suite talks
+to KAL. Auto-accept's booking step is the one piece of sync logic with no test, because it is a
+real booking at the club.
 
 Notifications are the one part with no unit test behind it, because there is nothing to assert
 against short of a live push service and a real device. What can be checked instead is that the
@@ -497,6 +531,10 @@ builds identically on a laptop.
    | `BIGBUDS_VAPID_PUBLIC_KEY` | optional; `yarn vapid` generates the pair. Without them the app still records every notice and shows it in-app — only the notification is missing |
    | `BIGBUDS_VAPID_PRIVATE_KEY` | the other half. Changing either invalidates every subscription, and members have to turn notifications on again |
    | `BIGBUDS_VAPID_SUBJECT` | optional; a `mailto:` for a push service with a complaint about this app |
+   | `KAL_SCOPE_IDS` | optional; the Gladstone activity scope the timetable is drawn from, `FITC` by default |
+
+The variables keep their `BIGBUDS_` prefix from before the rename. Changing them would mean
+changing every deployment's configuration for no benefit.
 
 The container does not pin a port. Railway injects `PORT` and health-checks it, and Nitro
 resolves `NITRO_PORT` before `PORT` — so setting `NITRO_PORT` in the image makes the app listen on
@@ -512,13 +550,14 @@ A startup check logs whether the data directory is writable, and warns if `BIGBU
 unset in production, so a misconfigured volume announces itself in the deploy logs instead of at
 the first sign-in.
 
-`BIGBOX_EMAIL` and `BIGBOX_PASSWORD` are for poking the API by hand from a laptop. The deployed
+`KAL_EMAIL` and `KAL_PASSWORD` are for poking the API by hand from a laptop. The deployed
 app never reads them — there is no reason for them to exist as service variables.
 
-`numReplicas` is deliberately 1. The 15-minute sync runs in-process, so a second replica would
+`numReplicas` is deliberately 1. The 2-minute sync runs in-process, so a second replica would
 sign in as every member a second time on the same schedule for no benefit. If you do need to scale
 out, drop `nitro.scheduledTasks` from `nuxt.config.ts` and drive `POST /api/sync` from a Railway
 cron service with `BIGBUDS_SYNC_TOKEN` as a bearer token instead.
 
-[bigbox]: https://www.bigboxleisureclub.co.uk/
+[kal]: https://www.kal.org.uk/
+[kal-portal]: https://kal.gs-signature.cloud/Connect/mrmLogin.aspx
 [cosmic-app]: https://github.com/orta/bigbox-for-cosmic

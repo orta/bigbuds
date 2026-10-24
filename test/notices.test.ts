@@ -11,7 +11,7 @@ const NOW = '2026-08-14T09:00:00'
 
 const notice = (over: Partial<Notice> = {}): Notice => ({
   kind: 'promoted',
-  classEventId: '/bigbox/class_events/1',
+  classEventId: '/gs/sessions/1',
   name: 'Body Pump',
   startedAt: '2026-08-14T18:30:00',
   noticedAt: '2026-08-14T09:00:00.000Z',
@@ -71,7 +71,7 @@ describe('withNotice', () => {
 
     const held = withNotice([notice(), other], replacement, NOW)
 
-    expect(held.map(n => n.classEventId)).toEqual(['/bigbox/class_events/1', '/b'])
+    expect(held.map(n => n.classEventId)).toEqual(['/gs/sessions/1', '/b'])
     expect(held[0]!.kind).toBe('cancelled-for-you')
   })
 
@@ -111,6 +111,13 @@ describe('noticeSentence', () => {
 
     expect(title).toBe('Sam Ross cancelled a class for you')
   })
+
+  it('says a space opened without claiming the member has it', () => {
+    const { title, body } = noticeSentence(notice({ kind: 'space-available' }), 'Tomorrow at 09:30')
+
+    expect(title).toBe('A space opened — Body Pump')
+    expect(body).toBe('Tomorrow at 09:30. It goes to whoever books first.')
+  })
 })
 
 describe('noticesFrom', () => {
@@ -125,7 +132,7 @@ describe('noticesFrom', () => {
   it('converts the promotions a previous version wrote', () => {
     const converted = noticesFrom({
       promotions: [{
-        classEventId: '/bigbox/class_events/1',
+        classEventId: '/gs/sessions/1',
         name: 'Body Pump',
         startedAt: '2026-08-14T18:30:00',
         noticedAt: '2026-08-14T09:00:00.000Z',
@@ -135,7 +142,7 @@ describe('noticesFrom', () => {
 
     expect(converted).toEqual([{
       kind: 'promoted',
-      classEventId: '/bigbox/class_events/1',
+      classEventId: '/gs/sessions/1',
       name: 'Body Pump',
       startedAt: '2026-08-14T18:30:00',
       noticedAt: '2026-08-14T09:00:00.000Z',

@@ -64,7 +64,7 @@ export interface AroundMember {
 
 export interface ClassRow {
   id: string
-  /** IRI of the class type, e.g. `/bigbox/activities/2300`. */
+  /** IRI of the class type, e.g. `/gs/activities/strength-development`. */
   activityId: string | null
   name: string
   colorHex: string | null
@@ -94,6 +94,8 @@ export interface ClassRow {
   attendeeId: string | null
   /** False once the club's cancellation deadline has passed. Only sent for bookings. */
   cancellable?: boolean
+  /** Whether a waiting-list place is set to be booked as soon as a space opens. */
+  autoAccept: boolean
 
   category: Category
   categoryLabel: string

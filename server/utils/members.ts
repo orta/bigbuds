@@ -1,9 +1,9 @@
 /**
  * Members of this app, and what they share with each other.
  *
- * BigBox has no concept of following another member, so the desktop app's
- * "friends" feature works by storing a friend's *login* and signing in as
- * them. This replaces that: everyone signs into this app themselves, their own
+ * KAL has no concept of following another member, and the obvious workaround
+ * — storing a friend's *login* and signing in as them, which is what the
+ * BigBox desktop app this began as did — is a bad one. Instead: everyone signs into this app themselves, their own
  * bookings and gym visits are snapshotted here, and the shared view is
  * assembled from those snapshots. Nobody ever holds anybody else's credentials.
  */
@@ -11,11 +11,11 @@
 import { naiveNow, naiveTime, parseNaive, today } from '#shared/naive'
 import type { Notice } from '#shared/notices'
 import { currentNotices, withNotice } from '#shared/notices'
-import { BOOKED, QUEUED, detectPromotions } from '#shared/promotions'
+import { BOOKED, QUEUED, detectOpenings, detectPromotions, hasOpening } from '#shared/promotions'
 import type { Visit } from '#shared/visits'
 import { toVisits, weekdayOf } from '#shared/visits'
 import { decrypt, encrypt } from './crypto'
-import { getDirectory } from './planning'
+import { getDirectory, invalidatePlanning } from './planning'
 import type { Attendee } from './gladstone'
 import {
   Client,
@@ -26,6 +26,7 @@ import {
   coachName,
   isActive,
   isQueued,
+  placesRemaining,
   studioName,
 } from './gladstone'
 import {
@@ -52,7 +53,7 @@ export const ENTRY_RETENTION_DAYS = 7
  * Rebuilding walks a member's entire booking history, which the API returns
  * over many pages for anyone who has been a member a while. The answer only
  * changes when a booked class passes, so once a day is plenty and doing it on
- * every fifteen-minute sync would be rude to the club's API for nothing.
+ * every two-minute sync would be rude to the club's API for nothing.
  */
 const ATTENDED_REFRESH_MS = 24 * 60 * 60_000
 
@@ -64,13 +65,13 @@ interface CachedClient {
 }
 
 /**
- * Signed-in Resamania clients, keyed by contact IRI.
+ * Signed-in Gladstone clients, keyed by contact IRI.
  *
- * A client is worth reusing: logging in costs three round trips and the club's
- * API is not ours to hammer. Clients refresh their own tokens, so one stays
- * usable well past the hour an access token lasts, but they are dropped after
- * a while anyway so a member who changes their BigBox password is not served
- * indefinitely from a stale session.
+ * A client is worth reusing: logging in costs two round trips (the login check
+ * and the profile) and the club's API is not ours to hammer. Gladstone has no
+ * token to expire, so a client would work forever — they are dropped after a
+ * while anyway so a member who changes their KAL password finds out from a
+ * failed sync rather than being served indefinitely from an old one.
  */
 const CLIENT_TTL_MS = 30 * 60_000
 
@@ -97,9 +98,9 @@ export function forgetClient(contactId: string) {
 // --- Registration ---
 
 /**
- * Signs a member in against BigBox and records them here.
+ * Signs a member in against KAL and records them here.
  *
- * There is no separate sign-up: a BigBox membership *is* the account, so a
+ * There is no separate sign-up: a KAL membership *is* the account, so a
  * first login creates the record and every later one refreshes it. The
  * password is re-encrypted each time, so changing it at the club and signing
  * in here is all it takes to fix a broken background sync.
@@ -117,6 +118,7 @@ export async function signIn(email: string, password: string): Promise<Member> {
     hiddenCategories: current?.hiddenCategories ?? [],
     hideFinished: current?.hideFinished ?? false,
     hideVirtual: current?.hideVirtual ?? false,
+    autoAccept: current?.autoAccept ?? [],
     bookings: current?.bookings ?? [],
     entries: current?.entries ?? [],
     attended: current?.attended ?? {},
@@ -151,7 +153,7 @@ export const findMember = readMember
 // --- Snapshots ---
 
 /**
- * Refreshes this member's bookings and gym visits from BigBox.
+ * Refreshes this member's bookings and gym visits from KAL.
  *
  * Both snapshots are *replaced* rather than merged. A booking the member
  * cancelled in the club's own app has no row to update here, it simply stops
@@ -202,6 +204,7 @@ export async function syncMember(
       endedAt: classEnd(event) ?? undefined,
       studio: studioName(directory, event),
       coach: coachName(directory, event),
+      spaces: placesRemaining(event),
     }]
   })
 
@@ -224,15 +227,21 @@ export async function syncMember(
     const base = current ?? member
     const at = naiveNow()
 
-    noticed = detectPromotions(base.bookings ?? [], bookings, at).map(promotion => ({
-      ...promotion,
-      kind: 'promoted' as const,
-      noticedAt: new Date().toISOString(),
-      seen: false,
-    }))
+    const previous = base.bookings ?? []
+    noticed = [
+      ...detectPromotions(previous, bookings, at).map(promotion => ({ ...promotion, kind: 'promoted' as const })),
+      ...detectOpenings(previous, bookings, at).map(opening => ({ ...opening, kind: 'space-available' as const })),
+    ].map(notice => ({ ...notice, noticedAt: new Date().toISOString(), seen: false }))
+
+    // A space somebody else took, or one this member has since booked or
+    // walked away from, is no longer news — and "a space opened" left on the
+    // banner would send them to a class that is full again.
+    const open = new Set(bookings.filter(hasOpening).map(booking => booking.classEventId))
+    const held = currentNotices(base.notices, at).filter(notice =>
+      notice.kind !== 'space-available' || open.has(notice.classEventId))
 
     // Merge by entry IRI: the API's window overlaps what we already hold, and
-    // re-adding the same scan every fifteen minutes would multiply it.
+    // re-adding the same scan every two minutes would multiply it.
     const merged = new Map((base.entries ?? []).map(entry => [entry.id, entry]))
     if (base.shareEntries) {
       for (const scan of scans) merged.set(scan.id, scan)
@@ -241,6 +250,9 @@ export async function syncMember(
     return {
       ...base,
       bookings,
+      // A place the member is no longer waiting for has nothing to accept.
+      autoAccept: (base.autoAccept ?? []).filter(id =>
+        bookings.some(booking => booking.classEventId === id && booking.state === QUEUED)),
       attended: attended ?? base.attended,
       attendedSyncedAt: attended ? new Date().toISOString() : base.attendedSyncedAt,
       entries: base.shareEntries
@@ -249,8 +261,7 @@ export async function syncMember(
       // Recorded here rather than by the caller: this write already holds the
       // comparison that produced them, and doing it in a second write would
       // leave a window where a promotion was detected and never stored.
-      notices: noticed.reduce((held, notice) => withNotice(held, notice, at),
-        currentNotices(base.notices, at)),
+      notices: noticed.reduce((kept, notice) => withNotice(kept, notice, at), held),
       syncError: null,
       lastSyncedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -262,6 +273,67 @@ export async function syncMember(
     entries: saved.entries.length,
     notices: noticed,
   }
+}
+
+/**
+ * Books a waiting-list place the member asked to have accepted for them.
+ *
+ * One attempt per opt-in, whatever happens. If the club takes the booking the
+ * member is told they are in; if it refuses — somebody else got there first,
+ * or Gladstone will not book a member off their own waiting list — the opt-in
+ * is dropped and they are told the space exists, so they can go and try
+ * themselves. Retrying on every sync instead would mean a refused booking
+ * being re-sent to the club every two minutes for as long as the space stays
+ * open.
+ *
+ * Returns the notice to send, already recorded. The snapshot is updated to the
+ * seat in the same write, because otherwise the next sync would see queued
+ * turn into booked and announce the promotion a second time.
+ */
+export async function claimSpace(member: Member, booking: StoredBooking): Promise<Notice> {
+  let claimed = false
+
+  try {
+    const attendee = await (await clientFor(member)).book(booking.classEventId)
+    claimed = !isQueued(attendee)
+  } catch (error) {
+    console.error(`[auto-accept] ${member.email}: could not book ${booking.classEventId}`, error)
+  }
+
+  const notice: Notice = {
+    kind: claimed ? 'promoted' : 'space-available',
+    classEventId: booking.classEventId,
+    name: booking.name ?? 'your class',
+    startedAt: booking.startedAt,
+    noticedAt: new Date().toISOString(),
+    seen: false,
+  }
+
+  await writeMember(member.contactId, current => ({
+    ...current!,
+    bookings: claimed
+      ? current!.bookings.map(held =>
+          held.classEventId === booking.classEventId ? { ...held, state: BOOKED } : held)
+      : current!.bookings,
+    autoAccept: current!.autoAccept.filter(id => id !== booking.classEventId),
+    notices: withNotice(current!.notices, notice, naiveNow()),
+    updatedAt: new Date().toISOString(),
+  }))
+
+  if (claimed) invalidatePlanning()
+  return notice
+}
+
+/** Turns auto-accept on or off for one of the member's waiting-list places. */
+export function setAutoAccept(contactId: string, classEventId: string, on: boolean): Promise<Member> {
+  return writeMember(contactId, current => ({
+    ...current!,
+    autoAccept: [
+      ...current!.autoAccept.filter(id => id !== classEventId),
+      ...(on ? [classEventId] : []),
+    ],
+    updatedAt: new Date().toISOString(),
+  }))
 }
 
 /**

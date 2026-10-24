@@ -1,7 +1,7 @@
 /**
  * The member's own upcoming classes.
  *
- * Read live from BigBox rather than from our snapshot: this is the page where
+ * Read live from KAL rather than from our snapshot: this is the page where
  * being wrong matters most, and the snapshot exists to serve *other* people.
  */
 
@@ -59,6 +59,7 @@ export default defineEventHandler(async event => {
         queued: isQueued(attendee),
         booked: !isQueued(attendee),
         cancellable: isCancellable(attendee),
+        autoAccept: isQueued(attendee) && member.autoAccept.includes(entry.id),
         category: info.category,
         categoryLabel: CATEGORIES[info.category].label,
         tags: info.tags,

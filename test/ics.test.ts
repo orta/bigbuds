@@ -4,10 +4,10 @@ import { buildCalendar, fold, icsEscape, icsLocal } from '../shared/ics'
 const NOW = '2026-08-14T05:30:00.000Z'
 
 const feed = (events: Parameters<typeof buildCalendar>[0]['events']) =>
-  buildCalendar({ name: 'BigBox — Sam Ross', events, now: NOW })
+  buildCalendar({ name: 'KAL — Sam Ross', events, now: NOW })
 
 const CLASS = {
-  uid: 'bigbox-class-events-1722803@bigbuds',
+  uid: 'gs-sessions-1722803@bigbuds',
   start: '2026-08-14T06:30:00',
   end: '2026-08-14T07:15:00',
   summary: 'Body Pump',
@@ -120,7 +120,7 @@ describe('buildCalendar', () => {
   })
 
   it('gives every event a stable uid, so a re-poll updates rather than duplicates', () => {
-    expect(lines(feed([CLASS]))).toContain('UID:bigbox-class-events-1722803@bigbuds')
+    expect(lines(feed([CLASS]))).toContain('UID:gs-sessions-1722803@bigbuds')
   })
 
   it('leaves out the optional properties it has no value for', () => {

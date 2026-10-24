@@ -1,7 +1,7 @@
 /**
  * The club's timetable for one day, with everything a member needs to decide.
  *
- * This is where the app earns its name: BigBox's own response is merged with
+ * This is where the app earns its name: the club's own response is merged with
  * what other members have shared here — the classes they are booked onto, and
  * the hours they are usually at the club.
  */
@@ -59,6 +59,7 @@ export default defineEventHandler(async event => {
        */
       finished: entry.start !== null && entry.start < now,
       attendedCount: attended?.count ?? 0,
+      autoAccept: entry.queued && member.autoAccept.includes(entry.id),
       attendedLast: attended?.lastAt ?? null,
       noteCount: entry.activityId ? (notes[entry.activityId] ?? 0) : 0,
       going: [],

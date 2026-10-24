@@ -1,10 +1,10 @@
 /**
- * Encryption for stored BigBox passwords.
+ * Encryption for stored KAL passwords.
  *
  * The app signs in as each member on a schedule so their bookings stay fresh
- * for everyone else, and the Resamania API offers nothing better to persist —
- * refresh tokens rotate on every use and expire in an hour, so they cannot
- * carry a member across a nightly cron. That means holding the real password,
+ * for everyone else, and Gladstone offers nothing better to persist — it has
+ * no token at all, and wants the member's email and password on every single
+ * request. That means holding the real password,
  * which is a genuine liability and is treated as one:
  *
  * - AES-256-GCM, so a tampered ciphertext fails to decrypt rather than

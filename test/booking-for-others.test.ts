@@ -11,13 +11,13 @@ import { describe, expect, it } from 'vitest'
 import { buddiesFor, mayBookFor } from '../server/utils/members'
 import type { Member } from '../server/utils/store'
 
-const ME = '/bigbox/contacts/1'
-const WIFE = '/bigbox/contacts/2'
-const STRANGER = '/bigbox/contacts/3'
+const ME = '/gs/contacts/1'
+const WIFE = '/gs/contacts/2'
+const STRANGER = '/gs/contacts/3'
 
 const member = (contactId: string, over: Partial<Member> = {}): Member => ({
   contactId,
-  clubId: '/bigbox/clubs/270',
+  clubId: '/gs/sites/CVLC',
   email: `${contactId}@example.com`,
   givenName: 'Sam',
   familyName: contactId.slice(-1),
@@ -74,7 +74,7 @@ describe('the people you can book for', () => {
   const members = [
     member(ME, { bookableBy: [WIFE] }),
     member(WIFE, { givenName: 'Wanda', bookableBy: [ME], bookings: [
-      { classEventId: '/bigbox/class_events/9', state: 'booked', startedAt: '2026-08-21T06:30:00' },
+      { classEventId: '/gs/sessions/9', state: 'booked', startedAt: '2026-08-21T06:30:00' },
     ] }),
     member(STRANGER, { givenName: 'Nia' }),
   ]

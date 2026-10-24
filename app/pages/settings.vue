@@ -1,5 +1,5 @@
 <script setup lang="ts">
-useHead({ title: 'Settings · BigBuds' })
+useHead({ title: 'Settings · KAL Pal' })
 
 const { user, fetch: refreshSession, clear } = useUserSession()
 const toast = useToast()
@@ -202,7 +202,7 @@ async function signOut() {
             Show my classes to other members
           </h2>
           <p class="mt-1 text-sm text-muted">
-            When this is on, anyone else signed into BigBuds sees which classes
+            When this is on, anyone else signed into KAL Pal sees which classes
             you are booked onto. Turn it off and you disappear from their
             timetables immediately — you will still see theirs.
           </p>
@@ -222,7 +222,7 @@ async function signOut() {
             Show when I come and go
           </h2>
           <p class="mt-1 text-sm text-muted">
-            BigBuds keeps the last week of your badge scans at the club's doors,
+            KAL Pal keeps the last week of your badge scans at the club's doors,
             so other members can see roughly when you usually train. Turning
             this off stops the scans being collected and deletes the ones
             already held — it does not merely hide them.
@@ -243,10 +243,10 @@ async function signOut() {
             Tell me when a class changes without me
           </h2>
           <p class="mt-1 text-sm text-muted">
-            Two things, and only these two. When the club moves you off a
-            waiting list and onto a class — it does that automatically and
-            tells nobody, so the only other way to find out is to look; BigBuds
-            checks every fifteen minutes. And when somebody you have allowed
+            Two things, and only these two. When a space opens at a class you
+            are on the waiting list for — the club offers it to the whole list
+            at once and it goes to whoever books first; KAL Pal checks every
+            two minutes. And when somebody you have allowed
             books you into a class or cancels one for you, because a class
             appearing or disappearing in your name is not something to discover
             by turning up.
@@ -261,7 +261,7 @@ async function signOut() {
             still see it in the app the next time you open it.
           </p>
           <p v-else-if="!push.supported.value" class="mt-2 text-sm text-warning">
-            This browser cannot show notifications. On an iPhone, add BigBuds
+            This browser cannot show notifications. On an iPhone, add KAL Pal
             to your home screen first and open it from there.
           </p>
           <p v-else-if="push.permission.value === 'denied'" class="mt-2 text-sm text-warning">
@@ -290,8 +290,8 @@ async function signOut() {
       <p class="mt-1 text-sm text-muted">
         A private link your phone or computer can subscribe to, so the classes
         you book turn up alongside everything else you have on. It keeps itself
-        up to date — bookings made in the club's own app appear within about
-        fifteen minutes, and cancelling anywhere removes it.
+        up to date — bookings made in the club's own app appear within a few
+        minutes, and cancelling anywhere removes it.
       </p>
 
       <template v-if="calendarUrl">
@@ -362,7 +362,7 @@ async function signOut() {
       </h2>
       <p class="mt-1 text-sm text-muted">
         Nobody, unless you say so. Anyone you allow can book you onto classes
-        and cancel what they booked — the bookings are made on your own BigBox
+        and cancel what they booked — the bookings are made on your own KAL
         account, exactly as if you had made them. Turn it on beside a person's
         name on the
         <NuxtLink to="/people" class="text-primary underline underline-offset-2">
@@ -395,10 +395,10 @@ async function signOut() {
 
     <UCard>
       <h2 class="font-medium">
-        Your BigBox login
+        Your KAL login
       </h2>
       <p class="mt-1 text-sm text-muted">
-        BigBuds stores your BigBox password, encrypted, so it can refresh your
+        KAL Pal stores your KAL password, encrypted, so it can refresh your
         schedule in the background — that is what keeps you visible to other
         members between visits. If you change your password at the club, sign
         in here again to reconnect.

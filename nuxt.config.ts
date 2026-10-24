@@ -1,7 +1,7 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 
 /** One sentence, used by the tab, the manifest and the link preview alike. */
-const DESCRIPTION = 'Book BigBox classes, and see which of your gym buddies are going.'
+const DESCRIPTION = 'Book KAL classes, and see which of your gym buddies are going.'
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
@@ -20,12 +20,12 @@ export default defineNuxtConfig({
 
   app: {
     head: {
-      title: 'BigBuds',
+      title: 'KAL Pal',
       htmlAttrs: { lang: 'en-GB' },
       meta: [
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
         { name: 'description', content: DESCRIPTION },
-        { name: 'application-name', content: 'BigBuds' },
+        { name: 'application-name', content: 'KAL Pal' },
 
         /**
          * Two, so the browser chrome matches the page rather than the taste of
@@ -40,18 +40,18 @@ export default defineNuxtConfig({
         // sticky header sits below it instead of under it.
         { name: 'mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
-        { name: 'apple-mobile-web-app-title', content: 'BigBuds' },
+        { name: 'apple-mobile-web-app-title', content: 'KAL Pal' },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'black' },
 
         // The link somebody sends a gym friend is how anyone arrives here, so
         // it gets a card. `app.vue` adds the absolute URLs these need.
         { property: 'og:type', content: 'website' },
-        { property: 'og:site_name', content: 'BigBuds' },
-        { property: 'og:title', content: 'BigBuds' },
+        { property: 'og:site_name', content: 'KAL Pal' },
+        { property: 'og:title', content: 'KAL Pal' },
         { property: 'og:description', content: DESCRIPTION },
         { property: 'og:image:width', content: '1200' },
         { property: 'og:image:height', content: '630' },
-        { property: 'og:image:alt', content: 'BigBuds' },
+        { property: 'og:image:alt', content: 'KAL Pal' },
         { name: 'twitter:card', content: 'summary_large_image' },
       ],
       link: [
@@ -67,7 +67,7 @@ export default defineNuxtConfig({
   },
 
   // Members' schedules are nobody else's business, and there is nothing here
-  // for a crawler to index — every page needs a BigBox login.
+  // for a crawler to index — every page needs a KAL login.
   robots: { disallow: '/' },
 
   runtimeConfig: {
@@ -107,9 +107,10 @@ export default defineNuxtConfig({
 
   nitro: {
     experimental: { tasks: true },
-    // Keeps everyone's shared bookings roughly current without anyone having
-    // to open the app. `server/tasks/sync.ts`.
-    scheduledTasks: { '*/15 * * * *': ['sync'] },
+    // Keeps everyone's shared bookings current without anyone having to open
+    // the app. Every two minutes because a waiting-list space at KAL goes to
+    // whoever books first and is usually gone within five. `server/tasks/sync.ts`.
+    scheduledTasks: { '*/2 * * * *': ['sync'] },
   },
 
   typescript: { typeCheck: false },

@@ -4,7 +4,7 @@ import { addDays, today as clubToday } from '#shared/naive'
 import type { Visit } from '#shared/visits'
 import { describeDuration, usualPattern } from '#shared/visits'
 
-useHead({ title: 'People · BigBuds' })
+useHead({ title: 'People · KAL Pal' })
 
 const today = clubToday()
 const tomorrow = addDays(today, 1)
@@ -94,7 +94,7 @@ function hoursLabel(visits: Visit[]) {
       People
     </h1>
     <p class="mb-5 text-sm text-muted">
-      Everyone using BigBuds who has left themselves visible. Their booked
+      Everyone using KAL Pal who has left themselves visible. Their booked
       classes show up against the timetable as you browse it, and you can let
       any of them book classes for you.
     </p>
@@ -156,7 +156,7 @@ function hoursLabel(visits: Visit[]) {
                 <span class="font-medium">book for</span> menu on the timetable.
               </template>
               <template v-else>
-                They will be able to book and cancel classes on your BigBox
+                They will be able to book and cancel classes on your KAL
                 account.
               </template>
             </p>

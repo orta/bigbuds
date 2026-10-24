@@ -6,7 +6,7 @@
  * the member which of the two actually happened rather than assuming a seat.
  *
  * `forContactId` books somebody else in. That is only possible because this
- * app already holds every member's own BigBox login for the background sync:
+ * app already holds every member's own KAL login for the background sync:
  * the booking is made *as them*, by their own client, and looks to the club
  * exactly like one they made themselves. Whether it is allowed is settled by
  * `requireSubject` against their grant list, never by what the browser sent.

@@ -28,13 +28,17 @@ import { readMembers, writeMember } from './store'
 export const NOTE_MAX_LENGTH = 500
 
 /**
- * An activity IRI, e.g. `/bigbox/activities/2300`.
+ * An activity IRI, e.g. `/gs/activities/strength-development`.
+ *
+ * Gladstone has no class-type id, so the last segment is a slug of the class
+ * title (see `classActivityId`) — lower-case letters, digits and hyphens. That
+ * still rules out dots and slashes, so a traversal cannot get through.
  *
  * Checked because it ends up as a key in a JSON object that is written to
  * disk: without this, anything the browser sent would become a permanent
  * entry in the member's file, and `__proto__` is a key too.
  */
-const ACTIVITY_IRI = /^\/[a-z0-9_]+\/activities\/\d+$/
+const ACTIVITY_IRI = /^\/[a-z0-9_]+\/activities\/[a-z0-9-]+$/
 
 export const isActivityId = (value: string): boolean => ACTIVITY_IRI.test(value)
 
