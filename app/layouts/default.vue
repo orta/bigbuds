@@ -50,6 +50,62 @@ async function dismiss(classEventId: string) {
   }
 }
 
+/**
+ * Asking for notifications where people will see it.
+ *
+ * The switch lives in Settings, behind the menu under the member's name, and
+ * the news it exists for — a space opening, usually gone within minutes — is
+ * worth nothing if nobody found it. So it is offered here once, on whatever
+ * page they land on, until they turn it on or say no.
+ *
+ * Not offered where it cannot work: a server without keys, or a browser that
+ * has already been told no (only the member can undo that, in its settings).
+ * iPhones get their own message, because Safari only allows notifications to
+ * an app opened from the home screen and has no API that would add it there.
+ */
+const push = usePush()
+const promptDismissed = ref(true)
+const isIos = ref(false)
+
+onMounted(() => {
+  try {
+    promptDismissed.value = localStorage.getItem('kalpal:push-prompt') === 'dismissed'
+  } catch {
+    promptDismissed.value = false
+  }
+  const standalone = window.matchMedia('(display-mode: standalone)').matches
+  isIos.value = /iPhone|iPad|iPod/.test(navigator.userAgent) && !standalone
+})
+
+const pushPrompt = computed(() => {
+  if (!loggedIn.value || promptDismissed.value || !push.configured.value) return null
+  if (push.supported.value) {
+    if (push.subscribed.value || push.permission.value === 'denied') return null
+    return 'enable' as const
+  }
+  return isIos.value ? 'home-screen' as const : null
+})
+
+function dismissPrompt() {
+  promptDismissed.value = true
+  try {
+    localStorage.setItem('kalpal:push-prompt', 'dismissed')
+  } catch {
+    // Shown again next visit, which is the lesser problem.
+  }
+}
+
+async function enablePush() {
+  if (await push.enable()) {
+    useToast().add({
+      title: 'You will be told when a space comes up',
+      description: 'Settings has a button to send yourself a test.',
+      icon: 'i-lucide-bell',
+      color: 'success',
+    })
+  }
+}
+
 async function signOut() {
   await $fetch('/api/auth/logout', { method: 'POST' })
   await clear()
@@ -103,6 +159,31 @@ async function signOut() {
     </header>
 
     <main class="mx-auto max-w-4xl px-4 py-6">
+      <UAlert
+        v-if="pushPrompt === 'enable'"
+        class="mb-5"
+        icon="i-lucide-bell"
+        color="primary"
+        variant="subtle"
+        title="Get told when a waiting-list space opens"
+        description="KAL gives a freed space to whoever books first. A notification on this device is how you get there before everyone else on the list."
+        :actions="[
+          { label: 'Turn on notifications', loading: push.busy.value, onClick: enablePush },
+          { label: 'Not now', color: 'neutral', variant: 'ghost', onClick: dismissPrompt },
+        ]"
+      />
+      <UAlert
+        v-else-if="pushPrompt === 'home-screen'"
+        class="mb-5"
+        icon="i-lucide-smartphone"
+        color="primary"
+        variant="subtle"
+        title="Want a notification when a space opens?"
+        description="On iPhone, tap Share → Add to Home Screen, then open KAL Pal from there and turn notifications on."
+        :close="{ color: 'neutral', variant: 'ghost' }"
+        @update:open="dismissPrompt"
+      />
+
       <!-- What happened while nobody was looking. One per class, each
            dismissed by hand rather than by having been rendered — clearing
            "Sam booked you in" should not also clear a promotion under it. -->

@@ -142,6 +142,32 @@ async function saveNotify(next: boolean) {
   })
 }
 
+const testing = ref(false)
+
+async function sendTest() {
+  testing.value = true
+  try {
+    const { sent } = await $fetch('/api/push/test', { method: 'POST' })
+    toast.add(sent
+      ? {
+          title: `Sent to ${sent === 1 ? 'one device' : `${sent} devices`}`,
+          description: 'If nothing appears, check this device is not in Do Not Disturb or Focus.',
+          icon: 'i-lucide-send',
+          color: 'neutral',
+        }
+      : {
+          title: 'No devices to send to',
+          description: 'Turn notifications off and on again on this device.',
+          icon: 'i-lucide-bell-off',
+          color: 'warning',
+        })
+  } catch {
+    toast.add({ title: 'Could not send that', color: 'error', icon: 'i-lucide-alert-circle' })
+  } finally {
+    testing.value = false
+  }
+}
+
 // --- Calendar ---
 
 const { data: calendar, refresh: refreshCalendar } = await useFetch<{ path: string | null }>(
@@ -324,10 +350,22 @@ async function signOut() {
             Your browser is blocking notifications for this site. That switch
             is in its own settings rather than here.
           </p>
-          <p v-else-if="notify" class="mt-2 text-sm text-muted">
-            On for this device. A phone and a laptop are separate — turn it on
-            wherever you want to hear about it.
-          </p>
+          <template v-else-if="notify">
+            <p class="mt-2 text-sm text-muted">
+              On for this device. A phone and a laptop are separate — turn it on
+              wherever you want to hear about it.
+            </p>
+            <UButton
+              label="Send a test"
+              icon="i-lucide-send"
+              color="neutral"
+              variant="outline"
+              size="xs"
+              class="mt-3"
+              :loading="testing"
+              @click="sendTest"
+            />
+          </template>
         </div>
         <USwitch
           v-model="notify"

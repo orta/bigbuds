@@ -72,7 +72,13 @@ function vapid(): Vapid | null {
   const privateKey = process.env.BIGBUDS_VAPID_PRIVATE_KEY
   // A contact address for the push service to use if this app starts
   // misbehaving. The spec wants one; the services mostly do not check.
-  const subject = process.env.BIGBUDS_VAPID_SUBJECT || 'mailto:nobody@example.com'
+  //
+  // `web-push` insists on a URL and throws on a bare address, so one is
+  // accepted and given its `mailto:`. Left to throw, it took the whole
+  // feature down: the config endpoint failed, so every browser was told push
+  // was not set up, and every send failed with it.
+  const raw = process.env.BIGBUDS_VAPID_SUBJECT?.trim() || 'mailto:nobody@example.com'
+  const subject = /^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `mailto:${raw}`
 
   if (!publicKey || !privateKey) {
     console.warn(
@@ -83,7 +89,15 @@ function vapid(): Vapid | null {
     return null
   }
 
-  webpush.setVapidDetails(subject, publicKey, privateKey)
+  try {
+    webpush.setVapidDetails(subject, publicKey, privateKey)
+  } catch (error) {
+    // A malformed key. Off, loudly, rather than throwing from every caller —
+    // `notify` promises the sync it never throws.
+    console.error('[push] the VAPID settings were rejected — notifications are off.', error)
+    configured = null
+    return null
+  }
   configured = { subject, publicKey, privateKey }
   return configured
 }
