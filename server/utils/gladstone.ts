@@ -214,7 +214,11 @@ export interface ClassEvent {
   slotsAvailable?: number | null
   /** How many people are on the waiting list. */
   waitListCount?: number | null
-  /** The member's own state: `Unbooked`, `Booked`, or `BookedWaitingList`. */
+  /**
+   * The member's own state: `Unbooked`, `BookedWaitingList`, or a seat —
+   * `Booked`, or `BookedPaid` once the club has taken payment. Read through
+   * `isBookedBy` / `isQueuedBy` rather than compared directly.
+   */
   myBookingStatus?: string | null
   /** The member's 1-based waiting-list place, when Gladstone reports it. */
   waitListPos?: number | null
@@ -335,20 +339,27 @@ export const isCancellable = (attendee: Attendee) =>
 
 /** The member's own role on a session, synthesised from its inline state. */
 export function myAttendee(event: ClassEvent, contactId: string): Attendee | undefined {
-  const status = event.myBookingStatus
-  if (!status || status === 'Unbooked') return undefined
+  if (!isBookedBy(event, contactId) && !isQueuedBy(event, contactId)) return undefined
   return {
     '@id': event['@id'],
     contactId,
-    state: status === 'BookedWaitingList' ? 'queued' : 'booked',
+    state: isQueuedBy(event, contactId) ? 'queued' : 'booked',
     classEvent: event,
     cancelDelayOver: !event.showCancel,
   }
 }
 
-/** Whether this member holds an actual seat — not a waiting-list place. */
+/**
+ * Whether this member holds an actual seat — not a waiting-list place.
+ *
+ * Anything that is neither unbooked nor the waiting list. Gladstone has more
+ * than one word for a seat (`Booked`, `BookedPaid`), and matching only the
+ * first showed a paid booking as no booking at all, with a Book button on it.
+ */
 export const isBookedBy = (event: ClassEvent, _contactId: string) =>
-  event.myBookingStatus === 'Booked'
+  !!event.myBookingStatus
+  && event.myBookingStatus !== 'Unbooked'
+  && event.myBookingStatus !== 'BookedWaitingList'
 
 export const isQueuedBy = (event: ClassEvent, _contactId: string) =>
   event.myBookingStatus === 'BookedWaitingList'
@@ -584,12 +595,11 @@ function toClassEvent(raw: RawSession): ClassEvent {
 
 /** The member's place on a session they hold, or `null` if they hold none. */
 function toAttendee(event: ClassEvent, contactId: string): Attendee | null {
-  const status = event.myBookingStatus
-  if (!status || status === 'Unbooked') return null
+  if (!isBookedBy(event, contactId) && !isQueuedBy(event, contactId)) return null
   return {
     '@id': event['@id'],
     contactId,
-    state: status === 'BookedWaitingList' ? 'queued' : 'booked',
+    state: isQueuedBy(event, contactId) ? 'queued' : 'booked',
     classEvent: event,
     cancelDelayOver: !event.showCancel,
   }

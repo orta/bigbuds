@@ -74,6 +74,15 @@ describe('seats versus waiting-list places', () => {
     expect(isQueuedBy(queue, MINE)).toBe(true)
   })
 
+  it('counts a paid booking as a seat', () => {
+    // What KAL actually returns once a class has been paid for, which is most
+    // of them.
+    const paid = event({ myBookingStatus: 'BookedPaid' })
+    expect(isBookedBy(paid, MINE)).toBe(true)
+    expect(isQueuedBy(paid, MINE)).toBe(false)
+    expect(myAttendee(paid, MINE)?.state).toBe('booked')
+  })
+
   it('does not report a seat for someone only on the waiting list', () => {
     const queue = event({ myBookingStatus: 'BookedWaitingList' })
     expect(isBookedBy(queue, MINE)).toBe(false)
