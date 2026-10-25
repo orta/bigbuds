@@ -27,6 +27,7 @@ const member = (contactId: string, over: Partial<Member> = {}): Member => ({
   shareEntries: true,
   bookableBy: [],
   hiddenCategories: [],
+  sites: [],
   hideFinished: false,
   syncError: null,
   lastSyncedAt: null,

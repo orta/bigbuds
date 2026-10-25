@@ -73,5 +73,6 @@ export function sessionUser(member: Member) {
     hiddenCategories: member.hiddenCategories,
     hideFinished: member.hideFinished,
     hideVirtual: member.hideVirtual,
+    sites: member.sites,
   }
 }

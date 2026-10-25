@@ -23,6 +23,8 @@ declare module '#auth-utils' {
     hideFinished: boolean
     /** Whether virtual (unstaffed) classes are dropped from the timetable. */
     hideVirtual: boolean
+    /** Bare site ids shown on the timetable; empty means the home centre only. */
+    sites: string[]
   }
 }
 

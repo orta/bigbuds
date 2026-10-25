@@ -2,7 +2,8 @@
 
 import { z } from 'zod'
 import { CATEGORY_ORDER } from '#shared/categories'
-import { updateSettings } from '../utils/members'
+import { clientFor, updateSettings } from '../utils/members'
+import { getSites } from '../utils/planning'
 import { readMembers } from '../utils/store'
 import { requireMember, sessionUser } from '../utils/session'
 
@@ -16,6 +17,8 @@ const Body = z.object({
   hiddenCategories: z.array(z.enum(CATEGORY_ORDER as [string, ...string[]])).optional(),
   hideFinished: z.boolean().optional(),
   hideVirtual: z.boolean().optional(),
+  /** Bare site ids, e.g. `CVLC`. */
+  sites: z.array(z.string()).optional(),
 })
 
 export default defineEventHandler(async event => {
@@ -34,6 +37,13 @@ export default defineEventHandler(async event => {
     const known = new Set((await readMembers()).map(other => other.contactId))
     settings.bookableBy = [...new Set(settings.bookableBy)]
       .filter(contactId => contactId !== member.contactId && known.has(contactId))
+  }
+
+  if (settings.sites) {
+    // Only centres that exist, so a stale id cannot leave somebody with a
+    // timetable filtered down to nothing and no visible reason why.
+    const known = new Set((await getSites(await clientFor(member))).map(site => site.id))
+    settings.sites = [...new Set(settings.sites)].filter(id => known.has(id))
   }
 
   const updated = await updateSettings(member.contactId, settings)

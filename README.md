@@ -22,6 +22,11 @@ Aqua, Gentle & Over 50s and so on — each with a one-line explainer, because "R
 tell you nothing useful about what you would actually be doing. Toggle to **By time** for a flat
 chronological list instead.
 
+**More than one centre.** KAL's timetable covers every centre at once; KAL Pal shows your home
+centre by default, and Settings lets you tick any others you would go to. The timetable then
+interleaves them, each row naming its centre. Your bookings, and everyone else's, are read from
+every centre regardless, so a class booked elsewhere never goes missing.
+
 **Filters that stick.** Hide categories you never book — the kids' sessions, the inductions —
 and optionally drop classes that have already started, or the virtual (screen-played) ones, which
 are about a third of the timetable. All per-member, and they apply to the chronological view as
@@ -73,7 +78,9 @@ banner in the app if they have not — see [Notices](#notices).
 With it on, the sync that sees a space open books it before telling you anything, and the alert
 you get is *you are in* instead. One attempt per opt-in: if the booking is refused, the opt-in is
 dropped and you get the ordinary "a space opened" alert, so a refusal is never re-sent to the club
-every two minutes.
+every two minutes. Somebody who lets you book for them can have it turned on for their places too,
+from the people menu on the row. It is stored on their record and booked with their login, so they
+get the *you are in* alert just as if they had set it up themselves.
 
 **And when somebody else books you.** The same two channels for the other thing that happens to a
 member's schedule without them: being put into a class, or taken out of one, by somebody they gave

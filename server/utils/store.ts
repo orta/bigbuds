@@ -173,6 +173,14 @@ export interface Member {
    * club's classes are virtual, and plenty of members only want the live ones.
    */
   hideVirtual: boolean
+  /**
+   * The KAL centres whose classes appear on this member's timetable, by bare
+   * site id. Empty means their home centre only — see `sitesFor`.
+   *
+   * Plenty of members live between two centres and will go to whichever has
+   * the class, and the club's own timetable makes them pick one at a time.
+   */
+  sites: string[]
 
   /**
    * Waiting-list places this member wants KAL Pal to book the moment a space
@@ -338,6 +346,7 @@ function withDefaults(member: Member): Member {
     hiddenCategories: member.hiddenCategories ?? [],
     hideFinished: member.hideFinished ?? false,
     hideVirtual: member.hideVirtual ?? false,
+    sites: member.sites ?? [],
     autoAccept: member.autoAccept ?? [],
     bookings: member.bookings ?? [],
     entries: member.entries ?? [],

@@ -118,6 +118,7 @@ export async function signIn(email: string, password: string): Promise<Member> {
     hiddenCategories: current?.hiddenCategories ?? [],
     hideFinished: current?.hideFinished ?? false,
     hideVirtual: current?.hideVirtual ?? false,
+    sites: current?.sites ?? [],
     autoAccept: current?.autoAccept ?? [],
     bookings: current?.bookings ?? [],
     entries: current?.entries ?? [],
@@ -426,7 +427,7 @@ export async function recordSyncFailure(contactId: string, message: string) {
 export function updateSettings(
   contactId: string,
   settings: Partial<
-    Pick<Member, 'visible' | 'shareEntries' | 'bookableBy' | 'hiddenCategories' | 'hideFinished' | 'hideVirtual'>
+    Pick<Member, 'visible' | 'shareEntries' | 'bookableBy' | 'hiddenCategories' | 'hideFinished' | 'hideVirtual' | 'sites'>
   >,
 ): Promise<Member> {
   return writeMember(contactId, current => {
@@ -452,6 +453,8 @@ export interface BookingBuddy {
   name: string
   /** Their last-synced bookings, so the UI can say what they already hold. */
   bookings: StoredBooking[]
+  /** Which of their waiting-list places are set to be claimed when a space opens. */
+  autoAccept: string[]
 }
 
 /**
@@ -484,6 +487,7 @@ export function buddiesFor(members: Member[], viewerContactId: string): BookingB
       contactId: member.contactId,
       name: memberName(member),
       bookings: member.bookings,
+      autoAccept: member.autoAccept ?? [],
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
 }

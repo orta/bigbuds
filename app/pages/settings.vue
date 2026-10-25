@@ -79,6 +79,39 @@ const saveEntries = (next: boolean) => save('shareEntries', next, {
   off: 'Your gym hours are hidden, and what was recorded has been deleted',
 })
 
+// --- Sites ---
+
+/**
+ * Which KAL centres the timetable draws from.
+ *
+ * Saved on every tick rather than with a button, like the switches above.
+ * The last ticked centre cannot be unticked: a timetable with no centres is
+ * an empty page that looks like the club has cancelled everything.
+ */
+const { data: siteData } = await useFetch('/api/sites')
+const chosenSites = ref(new Set<string>(siteData.value?.chosen ?? []))
+const savingSites = ref(false)
+
+async function toggleSite(id: string, on: boolean) {
+  const previous = new Set(chosenSites.value)
+  const next = new Set(previous)
+  if (on) next.add(id)
+  else next.delete(id)
+  if (!next.size) return
+
+  chosenSites.value = next
+  savingSites.value = true
+  try {
+    await $fetch('/api/me', { method: 'PATCH', body: { sites: [...next] } })
+    await refreshSession()
+  } catch {
+    chosenSites.value = previous
+    toast.add({ title: 'Could not save that', color: 'error', icon: 'i-lucide-alert-circle' })
+  } finally {
+    savingSites.value = false
+  }
+}
+
 // --- Notifications ---
 
 const push = usePush()
@@ -194,6 +227,29 @@ async function signOut() {
         Signed in as {{ user?.name }} ({{ user?.membershipNumber }}).
       </p>
     </div>
+
+    <UCard v-if="siteData?.sites.length">
+      <h2 class="font-medium">
+        Which centres to show
+      </h2>
+      <p class="mt-1 text-sm text-muted">
+        The timetable shows classes from every centre you tick, side by side,
+        each marked with where it is. Your bookings show wherever they are,
+        whatever you pick here.
+      </p>
+
+      <ul class="mt-4 grid gap-2 sm:grid-cols-2">
+        <li v-for="site in siteData.sites" :key="site.id">
+          <UCheckbox
+            :model-value="chosenSites.has(site.id)"
+            :label="site.name"
+            :description="site.home ? 'Your home centre' : undefined"
+            :disabled="savingSites || (chosenSites.size === 1 && chosenSites.has(site.id))"
+            @update:model-value="(on) => toggleSite(site.id, on === true)"
+          />
+        </li>
+      </ul>
+    </UCard>
 
     <UCard>
       <div class="flex items-start justify-between gap-4">

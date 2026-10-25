@@ -95,6 +95,7 @@ async function cancel(entry: ClassRow) {
             :key="entry.id"
             :entry="entry"
             :pending="pendingId === entry.id"
+            :show-site="data?.showSite"
             @cancel="cancel"
             @open="detail = $event"
           />

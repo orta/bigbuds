@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { DropdownMenuItem } from '@nuxt/ui'
 import type { BookingBuddy, ClassRow } from '#shared/types'
 import { placesText, queuePositionText, timeRange } from '#shared/format'
 
@@ -17,6 +18,11 @@ const props = defineProps<{
    * one button the row already has.
    */
   bookFor?: BookingBuddy[]
+  /**
+   * Say which centre the class is at. Only when the member sees more than
+   * one: otherwise the page heading already says, and the line is crowded.
+   */
+  showSite?: boolean
 }>()
 
 /**
@@ -91,34 +97,45 @@ const buddyItems = computed(() => {
 
   if (!people.length || entry.isCancelled || entry.finished) return []
 
-  return [people.map(person => {
+  return [people.flatMap((person): DropdownMenuItem[] => {
     const held = entry.bookedFor.find(booked => booked.contactId === person.contactId)
 
     if (held) {
-      return {
+      const cancel = {
         label: held.state === 'queued'
           ? `Take ${person.name} off the list`
           : `Cancel for ${person.name}`,
         icon: 'i-lucide-user-minus',
         onSelect: () => emit('cancel', entry, person),
       }
+      if (held.state !== 'queued') return [cancel]
+
+      // The same race as the viewer's own place: whoever books first gets it.
+      const on = buddyAutoAccept.value[person.contactId] ?? held.autoAccept
+      return [{
+        label: `Auto-accept a space for ${person.name}`,
+        icon: on ? 'i-lucide-zap' : 'i-lucide-zap-off',
+        type: 'checkbox' as const,
+        checked: on,
+        onUpdateChecked: () => toggleAutoAccept(person),
+      }, cancel]
     }
 
     if (entry.isFull && !entry.hasQueueSpace) {
-      return {
+      return [{
         label: `No room for ${person.name}`,
         icon: 'i-lucide-user-x',
         disabled: true,
-      }
+      }]
     }
 
-    return {
+    return [{
       label: entry.hasQueueSpace
         ? `Put ${person.name} on the list`
         : `Book ${person.name} in`,
       icon: 'i-lucide-user-plus',
       onSelect: () => emit('book', entry, person),
-    }
+    }]
   })]
 })
 
@@ -155,29 +172,45 @@ function trigger() {
  * Kept on the card rather than sent up to the page: it changes nothing else
  * on screen, so a round trip through the page's refresh would only make the
  * toggle feel slow. The next fetch of the row brings the stored answer back.
+ *
+ * Buddies' answers are held the same way, keyed by contact, and only once
+ * changed here — until then the row's own `bookedFor` is the answer.
  */
 const toast = useToast()
 const autoAccept = ref(props.entry.autoAccept)
+const buddyAutoAccept = ref<Record<string, boolean>>({})
 const savingAutoAccept = ref(false)
 watch(() => props.entry.autoAccept, value => (autoAccept.value = value))
+watch(() => props.entry.bookedFor, () => (buddyAutoAccept.value = {}))
 
-async function toggleAutoAccept() {
-  const on = !autoAccept.value
+async function toggleAutoAccept(person?: BookingBuddy) {
+  const current = person
+    ? (buddyAutoAccept.value[person.contactId]
+      ?? props.entry.bookedFor.find(held => held.contactId === person.contactId)?.autoAccept
+      ?? false)
+    : autoAccept.value
+  const on = !current
+  const whose = person ? ` for ${person.name}` : ''
+
   savingAutoAccept.value = true
   try {
     const result = await $fetch('/api/classes/auto-accept', {
       method: 'PUT',
-      body: { classEventId: props.entry.id, on },
+      body: { classEventId: props.entry.id, on, forContactId: person?.contactId },
     })
-    autoAccept.value = result.autoAccept
+    if (person) buddyAutoAccept.value = { ...buddyAutoAccept.value, [person.contactId]: result.autoAccept }
+    else autoAccept.value = result.autoAccept
+
     toast.add(on
       ? {
-          title: `Auto-accept on for ${props.entry.name}`,
-          description: 'If a space opens, KAL Pal books it for you straight away.',
+          title: `Auto-accept on${whose} for ${props.entry.name}`,
+          description: person
+            ? `If a space opens, KAL Pal books it for ${person.name} straight away and tells them.`
+            : 'If a space opens, KAL Pal books it for you straight away.',
           icon: 'i-lucide-zap',
           color: 'success',
         }
-      : { title: `Auto-accept off for ${props.entry.name}`, icon: 'i-lucide-zap-off', color: 'neutral' })
+      : { title: `Auto-accept off${whose} for ${props.entry.name}`, icon: 'i-lucide-zap-off', color: 'neutral' })
   } catch (error) {
     toast.add({
       title: 'Could not change auto-accept',
@@ -188,6 +221,24 @@ async function toggleAutoAccept() {
     savingAutoAccept.value = false
   }
 }
+
+/**
+ * Who else is on this class, said honestly.
+ *
+ * A waiting-list place is not a promise to be there, so "Gemma is going" for
+ * somebody eighth in the queue sends people to a class expecting company that
+ * may never arrive. Seats and waiting places are named separately.
+ */
+const goingText = computed(() => {
+  const first = (person: { name: string }) => person.name.split(' ')[0]
+  const booked = props.entry.going.filter(person => person.state !== 'queued').map(first)
+  const queued = props.entry.going.filter(person => person.state === 'queued').map(first)
+
+  return [
+    booked.length && `${booked.join(', ')} ${booked.length === 1 ? 'is' : 'are'} going`,
+    queued.length && `${queued.join(', ')} ${queued.length === 1 ? 'is' : 'are'} on the waiting list`,
+  ].filter(Boolean).join(' · ')
+})
 
 const initials = (name: string) =>
   name.split(/\s+/).slice(0, 2).map(part => part[0] ?? '').join('').toUpperCase()
@@ -247,6 +298,8 @@ const initials = (name: string) =>
       </div>
 
       <p class="mt-0.5 truncate text-sm text-muted">
+        <span v-if="showSite && entry.club" class="font-medium text-default">{{ entry.club }}</span>
+        <span v-if="showSite && entry.club && (entry.coach || entry.studio || places)"> · </span>
         <span v-if="entry.coach">{{ entry.coach }}</span>
         <span v-if="entry.coach && entry.studio"> · </span>
         <span v-if="entry.studio">{{ entry.studio }}</span>
@@ -275,10 +328,7 @@ const initials = (name: string) =>
             :ui="{ root: person.state === 'queued' ? 'opacity-60' : '' }"
           />
         </UAvatarGroup>
-        <span class="text-xs text-muted">
-          {{ entry.going.map(person => person.name.split(' ')[0]).join(', ') }}
-          {{ entry.going.length === 1 ? 'is' : 'are' }} going
-        </span>
+        <span class="text-xs text-muted">{{ goingText }}</span>
       </div>
     </div>
 
@@ -329,7 +379,7 @@ const initials = (name: string) =>
           icon="i-lucide-users-round"
           :color="entry.bookedFor.length ? 'primary' : 'neutral'"
           :variant="entry.bookedFor.length ? 'soft' : 'ghost'"
-          :loading="pending"
+          :loading="pending || savingAutoAccept"
           size="sm"
           :aria-label="`Book someone else onto ${entry.name}`"
         />
@@ -351,7 +401,7 @@ const initials = (name: string) =>
           size="sm"
           :aria-pressed="autoAccept"
           :aria-label="`Auto-accept a space on ${entry.name}`"
-          @click="toggleAutoAccept"
+          @click="toggleAutoAccept()"
         />
       </UTooltip>
 

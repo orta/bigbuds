@@ -381,6 +381,7 @@ const describe = (error: unknown) =>
             :entry="entry"
             :pending="pendingId === entry.id"
             :book-for="bookFor"
+            :show-site="data?.showSite"
             @book="book"
             @cancel="cancel"
             @open="detail = $event"
@@ -396,6 +397,7 @@ const describe = (error: unknown) =>
         :entry="entry"
         :pending="pendingId === entry.id"
         :book-for="bookFor"
+        :show-site="data?.showSite"
         show-around
         @book="book"
         @cancel="cancel"

@@ -12,7 +12,11 @@
  * the API had personalised would show one member another's state.
  */
 
+import { BOOKING_DAYS_AHEAD } from '#shared/booking'
+import { addDays, today } from '#shared/naive'
 import type { ClassEvent, Client, Directory } from './gladstone'
+import { siteIdOf } from './gladstone'
+import type { Member } from './store'
 
 interface Entry<T> {
   value: Promise<T>
@@ -63,17 +67,61 @@ export function getDirectory(client: Client): Promise<Directory> {
 
 export function getPlanning(
   client: Client,
-  clubId: string,
   from: string,
   to: string,
 ): Promise<ClassEvent[]> {
-  // Keyed by member, not just by club: Gladstone personalises the timetable —
-  // each session carries the viewer's own booking state — so a grid cached
-  // under one member must never be served to another, or it would show them
-  // somebody else's bookings. (Resamania's grid was identical for everyone,
-  // and this key was just the club.)
-  return cached(`planning:${client.profile.contactId}:${clubId}:${from}:${to}`, PLANNING_TTL_MS, () =>
-    client.planning(clubId, from, to))
+  // Keyed by member: Gladstone personalises the timetable — each session
+  // carries the viewer's own booking state — so a grid cached under one
+  // member must never be served to another, or it would show them somebody
+  // else's bookings. (Resamania's grid was identical for everyone, and this
+  // key was just the club.) Not keyed by site: the response holds every site,
+  // and two members who chose different ones still want the same bytes.
+  return cached(`planning:${client.profile.contactId}:${from}:${to}`, PLANNING_TTL_MS, () =>
+    client.planning(from, to))
+}
+
+/** A KAL centre that runs classes. */
+export interface Site {
+  /** Bare site id, e.g. `CVLC`. */
+  id: string
+  name: string
+}
+
+/**
+ * Every site with classes on over the booking window.
+ *
+ * Gladstone has no list of sites that a member can read, so this is drawn
+ * from the timetable itself. A centre with nothing on that week is missing,
+ * which is the right answer for a list of places you might go to a class.
+ * Cached like the directory, and not per member: which centres exist is the
+ * same for everybody.
+ */
+export function getSites(client: Client): Promise<Site[]> {
+  return cached('sites', DIRECTORY_TTL_MS, async () => {
+    const from = today()
+    const events = await getPlanning(client, from, addDays(from, BOOKING_DAYS_AHEAD + 1))
+
+    const sites = new Map<string, string>()
+    for (const event of events) {
+      if (event.siteId) sites.set(event.siteId, event.siteName ?? event.siteId)
+    }
+
+    return [...sites].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
+  })
+}
+
+/**
+ * Which sites a member wants on their timetable.
+ *
+ * Their own choice when they have made one, otherwise their home centre — the
+ * one the club has on file for them, and the only one this app showed before
+ * there was a choice. Empty means every site, which is what a member with no
+ * home on file gets rather than an empty timetable.
+ */
+export function sitesFor(member: Pick<Member, 'sites' | 'clubId'>): string[] {
+  if (member.sites.length) return member.sites
+  const home = siteIdOf(member.clubId)
+  return home ? [home] : []
 }
 
 /**

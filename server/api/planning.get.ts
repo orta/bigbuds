@@ -8,10 +8,11 @@
 
 import { CATEGORIES, lookupClass } from '#shared/categories'
 import { addDays, naiveNow, today } from '#shared/naive'
+import { QUEUED } from '#shared/promotions'
 import type { ClassRow } from '#shared/types'
 import { alsoGoing, bookingBuddies, clientFor, isAround, regularsOn } from '../utils/members'
 import { noteCounts } from '../utils/notes'
-import { getDirectory, getPlanning } from '../utils/planning'
+import { getDirectory, getPlanning, sitesFor } from '../utils/planning'
 import { resolve } from '../utils/gladstone'
 import { requireMember } from '../utils/session'
 import { readMembers } from '../utils/store'
@@ -32,7 +33,7 @@ export default defineEventHandler(async event => {
   const [directory, events, regulars, buddies, everyone] = await Promise.all([
     getDirectory(client),
     // `to` is exclusive, so this is exactly one day.
-    getPlanning(client, member.clubId, from, addDays(from, 1)),
+    getPlanning(client, from, addDays(from, 1)),
     regularsOn(from, member.contactId),
     // The people who have asked this member to book for them.
     bookingBuddies(member.contactId),
@@ -41,8 +42,10 @@ export default defineEventHandler(async event => {
 
   const now = naiveNow()
   const notes = noteCounts(everyone)
+  const sites = new Set(sitesFor(member))
+  const shown = sites.size ? events.filter(classEvent => sites.has(classEvent.siteId ?? '')) : events
 
-  const entries: ClassRow[] = events.map(classEvent => {
+  const entries: ClassRow[] = shown.map(classEvent => {
     const entry = resolve(directory, classEvent, member.contactId)
     const info = lookupClass(entry.name)
     const attended = entry.activityId ? member.attended[entry.activityId] : undefined
@@ -82,7 +85,12 @@ export default defineEventHandler(async event => {
       bookedFor: buddies.flatMap(buddy => {
         const booking = buddy.bookings.find(held => held.classEventId === entry.id)
         return booking
-          ? [{ contactId: buddy.contactId, name: buddy.name, state: booking.state }]
+          ? [{
+              contactId: buddy.contactId,
+              name: buddy.name,
+              state: booking.state,
+              autoAccept: booking.state === QUEUED && buddy.autoAccept.includes(entry.id),
+            }]
           : []
       }),
     }
@@ -94,7 +102,13 @@ export default defineEventHandler(async event => {
   return {
     date: from,
     now,
-    club: entries.find(entry => entry.club)?.club ?? null,
+    /** Every centre on the day, in the order the member will meet them. */
+    club: [...new Set(entries.flatMap(entry => (entry.club ? [entry.club] : [])))].join(' · ') || null,
+    /**
+     * Whether each row should say which centre it is at. Not when there is
+     * only one: the heading already says, and the row has little room.
+     */
+    showSite: sites.size !== 1,
     /** Who this member may book in, alongside themselves. */
     bookFor: buddies.map(({ contactId, name }) => ({ contactId, name })),
     entries,

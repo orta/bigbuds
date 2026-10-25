@@ -27,6 +27,8 @@ export interface BookingBuddy {
 export interface BookedFor extends BookingBuddy {
   /** `booked` or `queued`. */
   state: string
+  /** Whether their waiting-list place is set to be booked as soon as a space opens. */
+  autoAccept: boolean
 }
 
 /** Another member's note about a class type. */

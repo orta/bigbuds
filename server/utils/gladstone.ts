@@ -113,7 +113,7 @@ const activityIri = (title: string) =>
   `/gs/activities/${title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'class'}`
 
 /** The bare site id out of a `/gs/sites/CVLC` IRI, or the value unchanged. */
-const siteIdOf = (iri: string) => (iri.startsWith('/gs/sites/') ? iri.slice('/gs/sites/'.length) : iri)
+export const siteIdOf = (iri: string) => (iri.startsWith('/gs/sites/') ? iri.slice('/gs/sites/'.length) : iri)
 
 /** The bare numeric session id out of a `/gs/sessions/123` IRI, or the value unchanged. */
 const sessionIdOf = (idOrIri: string) =>
@@ -653,14 +653,14 @@ export class Client {
   // --- Planning ---
 
   /**
-   * The class timetable for one site over a date range.
+   * The class timetable for every site over a date range.
    *
    * `from` is inclusive and `to` exclusive, as whole club-local days, matching
-   * the Resamania contract. Gladstone returns every site under the scope, so
-   * the result is narrowed to the member's own site.
+   * the Resamania contract. Gladstone returns every site under the scope in
+   * one response, so narrowing to the sites a member cares about is left to
+   * the caller — see `sitesFor`.
    */
-  async planning(clubId: string, from: NaiveDate, to: NaiveDate): Promise<ClassEvent[]> {
-    const siteId = siteIdOf(clubId)
+  async planning(from: NaiveDate, to: NaiveDate): Promise<ClassEvent[]> {
     const raw = await this.get<SessionsResponse>('/api/session', {
       scopeIds: SCOPE_IDS,
       fromUTC: naiveDateToEpoch(from),
@@ -668,11 +668,7 @@ export class Client {
       globalInfo: 1,
     })
 
-    const events = (raw.sessions ?? [])
-      .filter(session => !siteId || session.siteId === siteId)
-      .map(toClassEvent)
-
-    return this.remember(events)
+    return this.remember((raw.sessions ?? []).map(toClassEvent))
   }
 
   /**
@@ -682,9 +678,12 @@ export class Client {
    * the only source that carries a session id to cancel by, and it also marks
    * the member's state on each class inline. Limited to a forward window —
    * Gladstone only books a few weeks out, so this misses nothing bookable.
+   *
+   * Every site, not just the member's home one: a booking at the other centre
+   * is still a booking, and leaving it out would hide it from everyone else
+   * and from the calendar feed.
    */
   async bookingsFrom(from: NaiveDate): Promise<Attendee[]> {
-    const siteId = siteIdOf(this.profile.clubId)
     const to = addNaiveDays(from, BOOKING_WINDOW_DAYS)
     const raw = await this.get<SessionsResponse>('/api/session', {
       scopeIds: SCOPE_IDS,
@@ -693,9 +692,7 @@ export class Client {
       globalInfo: 1,
     })
 
-    const events = (raw.sessions ?? [])
-      .filter(session => !siteId || session.siteId === siteId)
-      .map(toClassEvent)
+    const events = (raw.sessions ?? []).map(toClassEvent)
     this.remember(events)
 
     return events

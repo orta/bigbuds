@@ -10,7 +10,7 @@ import { naiveNow, today } from '#shared/naive'
 import type { ClassRow } from '#shared/types'
 import { alsoGoing, clientFor } from '../utils/members'
 import { noteCounts } from '../utils/notes'
-import { getClassEvent, getDirectory } from '../utils/planning'
+import { getClassEvent, getDirectory, sitesFor } from '../utils/planning'
 import { classStart, isActive, isCancellable, isQueued, resolve } from '../utils/gladstone'
 import { requireMember } from '../utils/session'
 import { readMembers } from '../utils/store'
@@ -82,5 +82,10 @@ export default defineEventHandler(async event => {
   const going = await alsoGoing(entries.map(entry => entry.id), member.contactId)
   for (const entry of entries) entry.going = going[entry.id] ?? []
 
-  return { now, entries }
+  // Bookings come from every centre, so a member who only picked one can still
+  // have a class elsewhere — one booked in the club's app, or by a buddy.
+  const showSite = sitesFor(member).length !== 1
+    || new Set(entries.map(entry => entry.club)).size > 1
+
+  return { now, entries, showSite }
 })
