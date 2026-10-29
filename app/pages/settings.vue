@@ -346,10 +346,26 @@ async function signOut() {
             This browser cannot show notifications. On an iPhone, add KAL Pal
             to your home screen first and open it from there.
           </p>
-          <p v-else-if="push.permission.value === 'denied'" class="mt-2 text-sm text-warning">
-            Your browser is blocking notifications for this site. That switch
-            is in its own settings rather than here.
-          </p>
+          <template v-else-if="push.permission.value === 'denied'">
+            <p class="mt-2 text-sm text-warning">
+              Your browser has blocked notifications for KAL Pal, so the switch
+              here cannot turn them on. Only you can undo that — usually by
+              having pressed the wrong button when it asked.
+            </p>
+            <p class="mt-2 text-sm text-muted">
+              {{ push.help.value }}
+            </p>
+            <UButton
+              label="Check again"
+              icon="i-lucide-refresh-cw"
+              color="neutral"
+              variant="outline"
+              size="xs"
+              class="mt-3"
+              :loading="push.busy.value"
+              @click="push.refresh()"
+            />
+          </template>
           <template v-else-if="notify">
             <p class="mt-2 text-sm text-muted">
               On for this device. A phone and a laptop are separate — turn it on

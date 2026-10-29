@@ -93,6 +93,14 @@ function dismissPrompt() {
   } catch {
     // Shown again next visit, which is the lesser problem.
   }
+  // "Not now" is final for this banner, so say where the switch lives before
+  // the only visible way in disappears.
+  useToast().add({
+    title: 'You can turn this on any time',
+    description: 'The switch is in Settings, under your name at the top.',
+    icon: 'i-lucide-bell-off',
+    color: 'neutral',
+  })
 }
 
 async function enablePush() {

@@ -32,7 +32,7 @@ export default defineNuxtConfig({
          * whoever wrote the config: the app follows the system colour scheme,
          * and a fixed near-black bar above a white timetable looks like a bug.
          */
-        { name: 'theme-color', content: '#0a0a0a', media: '(prefers-color-scheme: dark)' },
+        { name: 'theme-color', content: '#1d293d', media: '(prefers-color-scheme: dark)' },
         { name: 'theme-color', content: '#ffffff', media: '(prefers-color-scheme: light)' },
 
         // Added to the home screen, this runs without browser chrome. The

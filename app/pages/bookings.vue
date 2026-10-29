@@ -37,8 +37,11 @@ const pendingId = ref<string | null>(null)
 /** The class whose description and notes are open, if any. */
 const detail = ref<ClassRow | null>(null)
 
+const confirmCancel = useConfirmCancel()
+
 async function cancel(entry: ClassRow) {
   if (!entry.attendeeId) return
+  if (!await confirmCancel(entry)) return
 
   pendingId.value = entry.id
   try {

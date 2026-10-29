@@ -48,7 +48,39 @@ export function usePush() {
   const configured = ref(false)
   const busy = ref(false)
 
+  /**
+   * Where the browser's own switch is, for when it has been set to "block".
+   *
+   * Once a member has said no to the permission dialog — and "Don't allow" is
+   * the button under the thumb — this app can never ask again; only the member
+   * can undo it, somewhere outside the page. "In your browser's settings" sends
+   * people hunting, so this says where, as well as it can be told from here.
+   */
+  const help = ref('')
+
   let publicKey: string | null = null
+  let configLoaded = false
+
+  function whereToAllow(): string {
+    const ua = navigator.userAgent
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+    // iPadOS reports itself as a Mac; the touch points give it away.
+    const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)
+
+    if (ios) {
+      return 'On your iPhone, open Settings, find KAL Pal in the list of apps, '
+        + 'tap Notifications and allow them.'
+    }
+    if (/Android/.test(ua)) {
+      return standalone
+        ? 'Hold the KAL Pal icon on your home screen, open its app info, and allow notifications.'
+        : 'Tap the padlock beside the address bar, open Permissions, and allow notifications.'
+    }
+    if (/Safari/.test(ua) && !/Chrome|Chromium|Edg/.test(ua)) {
+      return 'In Safari\u2019s Settings, under Websites then Notifications, find this site and choose Allow.'
+    }
+    return 'Click the icon at the left of the address bar, find Notifications, and allow them.'
+  }
 
   /** The app's service worker, registered on demand rather than at page load. */
   async function worker(): Promise<ServiceWorkerRegistration> {
@@ -77,10 +109,18 @@ export function usePush() {
     if (!supported.value) return
 
     permission.value = Notification.permission
+    help.value = `${whereToAllow()} Then come back here: it is checked again each time you do.`
 
-    const config = await $fetch<PushConfig>('/api/push/config').catch(() => null)
-    configured.value = Boolean(config?.enabled)
-    publicKey = config?.publicKey ?? null
+    // Once. This runs again every time the page comes back into view, and the
+    // server's keys do not change between glances.
+    if (!configLoaded) {
+      const config = await $fetch<PushConfig>('/api/push/config').catch(() => null)
+      if (config) {
+        configured.value = Boolean(config.enabled)
+        publicKey = config.publicKey ?? null
+        configLoaded = true
+      }
+    }
 
     if (permission.value !== 'granted') {
       subscribed.value = false
@@ -99,14 +139,19 @@ export function usePush() {
       permission.value = await Notification.requestPermission()
 
       if (permission.value !== 'granted') {
-        toast.add({
-          title: 'Notifications are blocked',
-          description: permission.value === 'denied'
-            ? 'Your browser is refusing them for this site — the setting is in its own preferences, not here.'
-            : 'Nothing was changed.',
-          color: 'warning',
-          icon: 'i-lucide-bell-off',
-        })
+        toast.add(permission.value === 'denied'
+          ? {
+              title: 'Your browser has blocked notifications for KAL Pal',
+              description: `Only you can undo that. ${whereToAllow()} Settings here explains it too.`,
+              color: 'warning',
+              icon: 'i-lucide-bell-off',
+            }
+          : {
+              title: 'Nothing was changed',
+              description: 'The switch is in Settings, under your name, whenever you want to try again.',
+              color: 'neutral',
+              icon: 'i-lucide-bell-off',
+            })
         return false
       }
 
@@ -172,7 +217,28 @@ export function usePush() {
     }
   }
 
-  onMounted(refresh)
+  /**
+   * Checked again whenever the page comes back into view.
+   *
+   * The permission is changed outside the page — in the phone's Settings, or a
+   * popover off the address bar — and nothing announces that it happened. The
+   * member comes back to a switch still saying it is blocked, which is the
+   * moment this exists for.
+   */
+  function recheck() {
+    if (document.visibilityState === 'visible') void refresh()
+  }
 
-  return { supported, permission, subscribed, configured, busy, enable, disable, refresh }
+  onMounted(() => {
+    void refresh()
+    document.addEventListener('visibilitychange', recheck)
+    window.addEventListener('focus', recheck)
+  })
+
+  onUnmounted(() => {
+    document.removeEventListener('visibilitychange', recheck)
+    window.removeEventListener('focus', recheck)
+  })
+
+  return { supported, permission, subscribed, configured, busy, help, enable, disable, refresh }
 }

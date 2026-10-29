@@ -332,7 +332,10 @@ const initials = (name: string) =>
       </div>
     </div>
 
-    <div class="flex shrink-0 items-center gap-1.5">
+    <!-- Spaced a little further apart than the rest of the row: "Cancel" is
+         the last of these, and a thumb aiming for the one before it should
+         not land there. -->
+    <div class="flex shrink-0 items-center gap-2.5">
       <!-- Right-aligned: people who tend to be at the club around now, which
            is a weaker signal than a booking and should not compete with it. -->
       <UPopover v-if="showAround && entry.around.length" mode="hover">

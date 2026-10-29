@@ -101,6 +101,11 @@ the People page. Those classes then carry a second control on the timetable: *Bo
 through her own KAL account, by the same stored credentials the background sync uses, so the
 club sees a booking she made herself and it turns up in her own app.
 
+Cancelling — your own place or somebody else's — asks first, in a dialog that names the class
+and what is lost. It is the one thing in the app that cannot be undone (a waiting-list place
+given up is a place at the back of the queue), and the button for it sits beside the auto-accept
+toggle on exactly the rows where people are reaching for something else.
+
 Nobody has this by default, and it is a list of named people rather than a switch, because "anyone
 signed into KAL Pal may book me" is not something anyone wants. The grant is one-directional —
 letting your wife book you does not let you book her — it covers cancelling as well as booking, so
@@ -356,6 +361,13 @@ Every notice is announced twice, and both halves matter:
   exists to give them. The record is dropped once the class starts, seen or not, which is also
   what stops the list growing without a bound anyone chose.
 
+Permission is asked for once, in a banner on whatever page the member lands on; *Not now* retires
+the banner and says where the switch went (Settings). "Don't allow" in the browser's own dialog is
+the button under the thumb, and once pressed this app can never ask again — so
+[`usePush`](./app/composables/usePush.ts) works out, as well as it can from the user agent, where
+that browser or phone keeps the setting, and re-checks the permission whenever the page comes back
+into view, so coming back from the phone's Settings is enough to light the switch up again.
+
 ### Booked and cancelled for you
 
 [`shared/notices.ts`](./shared/notices.ts) is the closed list, and it is closed on purpose: every
@@ -460,7 +472,9 @@ build or deploy time. Two decisions in there are worth knowing about:
 `public/site.webmanifest` makes it installable: standalone display, the club's colours for the
 splash, a maskable icon for Android launchers, and shortcuts straight to *My classes* and
 *People*. `nuxt.config.ts` carries the head links, a `theme-color` per colour scheme so the
-browser chrome matches the page, and the Open Graph tags — the way anybody joins KAL Pal is a
+browser chrome matches the page (the dark one is a step lighter than Nuxt UI's default, set in
+`app/assets/css/main.css`, after members found the stock palette too dark to read in a bright
+gym), and the Open Graph tags — the way anybody joins KAL Pal is a
 member sending them the link, so the link is worth a card. Its absolute URLs come from the request
 in `app/app.vue` rather than a configured domain, which would be wrong the first time the
 deployment moved.

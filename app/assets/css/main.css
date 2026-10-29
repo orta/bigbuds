@@ -8,3 +8,29 @@
 :root {
   --ui-primary: var(--color-lime-500);
 }
+
+/**
+ * A lighter dark mode.
+ *
+ * Nuxt UI's dark theme puts the page on neutral-900 and cards on neutral-800,
+ * which members found too dark to read a timetable on in a bright gym. Every
+ * surface and border is lifted one step of the palette; the text ladder is
+ * left where it was, since it already reads well on the lighter ground, except
+ * `dimmed`, which sat between muted and the old background and would have lost
+ * most of its contrast — it moves half a step.
+ *
+ * `theme-color` in `nuxt.config.ts` and `public/site.webmanifest` carry the
+ * same background as a hex value, so the browser chrome matches.
+ */
+.dark {
+  --ui-bg: var(--ui-color-neutral-800);
+  --ui-bg-muted: var(--ui-color-neutral-700);
+  --ui-bg-elevated: var(--ui-color-neutral-700);
+  --ui-bg-accented: var(--ui-color-neutral-600);
+
+  --ui-border: var(--ui-color-neutral-700);
+  --ui-border-muted: var(--ui-color-neutral-600);
+  --ui-border-accented: var(--ui-color-neutral-600);
+
+  --ui-text-dimmed: color-mix(in oklch, var(--ui-color-neutral-400), var(--ui-color-neutral-500));
+}

@@ -172,6 +172,8 @@ const pendingId = ref<string | null>(null)
  */
 const detail = ref<ClassRow | null>(null)
 
+const confirmCancel = useConfirmCancel()
+
 /**
  * Books a class. `subject` is somebody who has asked this member to book for
  * them; without it the booking is the member's own.
@@ -230,6 +232,10 @@ async function cancel(entry: ClassRow, subject?: BookingBuddy) {
   // The viewer's own attendee IRI is on the row; somebody else's is not ours
   // to know, so those cancellations name the class and let the server find it.
   if (!subject && !entry.attendeeId) return
+
+  // Asked first, always: this is the one thing here that cannot be undone, and
+  // the button for it sits next to the ones people actually mean to press.
+  if (!await confirmCancel(entry, subject)) return
 
   pendingId.value = entry.id
   try {
