@@ -19,6 +19,8 @@ const Body = z.object({
   hideVirtual: z.boolean().optional(),
   /** Bare site ids, e.g. `CVLC`. */
   sites: z.array(z.string()).optional(),
+  /** Activity IRIs of starred class types, e.g. `/gs/activities/body-pump`. */
+  favourites: z.array(z.string()).optional(),
 })
 
 export default defineEventHandler(async event => {
@@ -44,6 +46,13 @@ export default defineEventHandler(async event => {
     // timetable filtered down to nothing and no visible reason why.
     const known = new Set((await getSites(await clientFor(member))).map(site => site.id))
     settings.sites = [...new Set(settings.sites)].filter(id => known.has(id))
+  }
+
+  if (settings.favourites) {
+    // Not checked against the club's activity list, which would cost a
+    // round trip to KAL for a preference that hurts nobody if stale: a star
+    // on a class the club has dropped simply never matches a row again.
+    settings.favourites = [...new Set(settings.favourites)]
   }
 
   const updated = await updateSettings(member.contactId, settings)

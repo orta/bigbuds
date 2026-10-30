@@ -25,6 +25,8 @@ declare module '#auth-utils' {
     hideVirtual: boolean
     /** Bare site ids shown on the timetable; empty means the home centre only. */
     sites: string[]
+    /** Activity IRIs of the class types this member has starred. */
+    favourites: string[]
   }
 }
 

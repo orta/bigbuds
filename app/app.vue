@@ -23,6 +23,11 @@ useServerHead({
 
 <template>
   <UApp>
+    <!-- The thin bar along the top while a page is still on its way. The three
+         main tabs now show themselves before their data arrives, so this is
+         mostly for Settings, whose fetches still block, and for a slow first
+         load of a page's code. -->
+    <NuxtLoadingIndicator color="var(--ui-primary)" :height="2" />
     <NuxtRouteAnnouncer />
     <NuxtLayout>
       <NuxtPage />

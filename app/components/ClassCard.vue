@@ -40,6 +40,14 @@ const when = computed(() => timeRange(props.entry.start, props.entry.durationMin
 const places = computed(() => placesText(props.entry))
 
 /**
+ * Starred by the member. Lifts the whole row — border, ground and a filled
+ * star by the name — because the point of starring something is to find it
+ * again in a list of sixty without reading the list.
+ */
+const favourites = useFavourites()
+const favourite = computed(() => favourites.has(props.entry))
+
+/**
  * What the one button on this row should do.
  *
  * Booking and joining a waiting list are the same request to KAL, but they
@@ -246,8 +254,15 @@ const initials = (name: string) =>
 
 <template>
   <div
-    class="flex gap-3 rounded-lg border border-default bg-elevated/40 p-3 transition-colors"
-    :class="entry.finished || entry.isCancelled ? 'opacity-55' : 'hover:border-inverted/20'"
+    class="flex gap-3 rounded-lg border p-3 transition-colors"
+    :class="[
+      favourite
+        ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/20'
+        : 'border-default bg-elevated/40',
+      entry.finished || entry.isCancelled
+        ? 'opacity-55'
+        : favourite ? 'hover:border-primary' : 'hover:border-inverted/20',
+    ]"
   >
     <!-- The activity's own colour from the API, as a spine down the row. -->
     <div
@@ -272,6 +287,32 @@ const initials = (name: string) =>
             {{ entry.name }}
           </button>
         </h3>
+
+        <!-- The star. Rendered as an inline SVG so the favourite state can be
+             a filled shape rather than only a colour change — a lime outline
+             next to a grey outline does not read from across a phone. Not
+             offered on a class the club gives no type id, since there would
+             be nothing to key the star to. -->
+        <UTooltip
+          v-if="entry.activityId"
+          :text="favourite ? 'Remove from favourites' : 'Add to favourites'"
+        >
+          <button
+            type="button"
+            class="-my-1 rounded p-1 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            :class="favourite ? 'text-primary' : 'text-dimmed hover:text-default'"
+            :aria-pressed="favourite"
+            :aria-label="favourite ? `Remove ${entry.name} from favourites` : `Add ${entry.name} to favourites`"
+            @click="favourites.toggle(entry)"
+          >
+            <UIcon
+              name="i-lucide-star"
+              mode="svg"
+              class="size-4"
+              :class="favourite ? 'fill-current' : ''"
+            />
+          </button>
+        </UTooltip>
 
         <!-- What makes the name worth clicking. Silent at zero, because most
              classes have nothing behind them and sixty empty markers would

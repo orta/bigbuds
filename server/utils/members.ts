@@ -119,6 +119,7 @@ export async function signIn(email: string, password: string): Promise<Member> {
     hideFinished: current?.hideFinished ?? false,
     hideVirtual: current?.hideVirtual ?? false,
     sites: current?.sites ?? [],
+    favourites: current?.favourites ?? [],
     autoAccept: current?.autoAccept ?? [],
     bookings: current?.bookings ?? [],
     entries: current?.entries ?? [],
@@ -427,7 +428,7 @@ export async function recordSyncFailure(contactId: string, message: string) {
 export function updateSettings(
   contactId: string,
   settings: Partial<
-    Pick<Member, 'visible' | 'shareEntries' | 'bookableBy' | 'hiddenCategories' | 'hideFinished' | 'hideVirtual' | 'sites'>
+    Pick<Member, 'visible' | 'shareEntries' | 'bookableBy' | 'hiddenCategories' | 'hideFinished' | 'hideVirtual' | 'sites' | 'favourites'>
   >,
 ): Promise<Member> {
   return writeMember(contactId, current => {

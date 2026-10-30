@@ -119,9 +119,33 @@ const grouping = ref<'category' | 'time'>('category')
 
 const { data, status, refresh } = await useFetch('/api/planning', {
   query: { date },
+  // Not awaited when arriving from another tab: the page appears at once with
+  // the skeleton below, rather than the old tab sitting there until KAL
+  // answers, which it does slowly. The first server render still waits.
+  lazy: true,
 })
 
 const entries = computed<ClassRow[]>(() => (data.value?.entries ?? []) as ClassRow[])
+
+/**
+ * Whether the timetable on screen is for a different day than the one picked.
+ *
+ * This is what separates a day change from a refresh. Picking a day leaves
+ * the old day's rows on screen under the new day's heading until KAL replies,
+ * and KAL takes long enough that it reads as the tap not working — so the rows
+ * give way to a skeleton. Refreshing after a booking fetches the *same* day,
+ * and there the rows stay put, because the button that was pressed is already
+ * spinning and swapping sixty rows for grey bars would lose the reader's place.
+ */
+const stale = computed(() => data.value?.date !== date.value)
+const switching = computed(() => status.value === 'pending' && stale.value)
+
+/**
+ * KAL did not answer for the day that is picked. Said outright, with a retry,
+ * rather than leaving the previous day's rows under the new day's heading as
+ * if they were the answer.
+ */
+const failed = computed(() => status.value === 'error' && stale.value)
 
 /**
  * The people who have asked this member to book for them. Almost always
@@ -280,7 +304,7 @@ const describe = (error: unknown) =>
         </h1>
         <p class="text-sm text-muted">
           {{ data?.club ?? 'Kirklees Active Leisure' }}
-          <template v-if="bookedCount">
+          <template v-if="bookedCount && !switching">
             · you have {{ bookedCount }} on this day
           </template>
         </p>
@@ -317,6 +341,7 @@ const describe = (error: unknown) =>
         :label="relativeDayLabel(day, today, tomorrow)"
         :color="day === date ? 'primary' : 'neutral'"
         :variant="day === date ? 'solid' : 'subtle'"
+        :loading="switching && day === date"
         size="sm"
         class="shrink-0"
         @click="date = day"
@@ -348,9 +373,22 @@ const describe = (error: unknown) =>
       </template>
     </UInput>
 
-    <div v-if="status === 'pending' && !entries.length" class="space-y-2">
+    <!-- Loading a day. A heading line and a run of rows, so the page keeps
+         roughly its shape while KAL thinks about it. -->
+    <div v-if="switching" class="space-y-2" aria-busy="true" :aria-label="`Loading ${dayLabel(date)}`">
+      <USkeleton class="mb-3 h-5 w-40" />
       <USkeleton v-for="n in 6" :key="n" class="h-20 w-full" />
     </div>
+
+    <UAlert
+      v-else-if="failed"
+      icon="i-lucide-cloud-off"
+      color="error"
+      variant="subtle"
+      :title="`Could not load ${dayLabel(date)}`"
+      description="KAL did not answer. It is usually only slow rather than down, so trying again often works."
+      :actions="[{ label: 'Try again', color: 'neutral', variant: 'outline', size: 'xs', onClick: () => refresh() }]"
+    />
 
     <UAlert
       v-else-if="!visible.length"

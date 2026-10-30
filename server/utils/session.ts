@@ -74,5 +74,6 @@ export function sessionUser(member: Member) {
     hideFinished: member.hideFinished,
     hideVirtual: member.hideVirtual,
     sites: member.sites,
+    favourites: member.favourites,
   }
 }

@@ -12,7 +12,8 @@ const tomorrow = addDays(today, 1)
 const toast = useToast()
 const { user, fetch: refreshSession } = useUserSession()
 
-const { data, status, refresh } = await useFetch('/api/people')
+// Lazy so the tab switches at once and shows the skeleton below.
+const { data, status, refresh } = await useFetch('/api/people', { lazy: true })
 const members = computed(() => data.value?.members ?? [])
 
 /**

@@ -9,7 +9,9 @@ const toast = useToast()
 const today = clubToday()
 const tomorrow = addDays(today, 1)
 
-const { data, status, refresh } = await useFetch('/api/bookings')
+// Lazy so the tab switches at once and shows the skeleton below while KAL
+// answers; the first server render still waits for the data.
+const { data, status, refresh } = await useFetch('/api/bookings', { lazy: true })
 
 const entries = computed<ClassRow[]>(() => (data.value?.entries ?? []) as ClassRow[])
 

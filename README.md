@@ -38,6 +38,11 @@ never tried. Keyed on the class's name rather than on one session. Gladstone off
 history to build this from, so the count starts at zero and grows from the classes KAL Pal sees
 you booked onto.
 
+**Favourites.** Star a class type — on its row, or from its description — and every session of
+it is lifted out of the day: a tinted row with a filled star by the name, in both views and on
+*My classes* too. Per class type, like notes and the been-before count, so starring Body Pump
+once stars every Body Pump. Per member and private: nobody sees what anyone else has starred.
+
 **Who is usually around.** On the *By time* view, a class whose start falls inside somebody's
 usual hours on that weekday carries a right-aligned marker; hovering it names them and their
 window. This is a weaker signal than a booking and is presented as one — they are not going to

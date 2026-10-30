@@ -98,6 +98,10 @@ async function save() {
 
 const initials = (name: string) =>
   name.split(/\s+/).slice(0, 2).map(part => part[0] ?? '').join('').toUpperCase()
+
+/** The same star as on the row, for somebody who opened the class first. */
+const favourites = useFavourites()
+const favourite = computed(() => (entry.value ? favourites.has(entry.value) : false))
 </script>
 
 <template>
@@ -118,6 +122,21 @@ const initials = (name: string) =>
           <span v-if="entry.studio">{{ entry.studio }}</span>
           <span v-if="placesText(entry)">·</span>
           <span v-if="placesText(entry)">{{ placesText(entry) }}</span>
+
+          <UButton
+            v-if="entry.activityId"
+            :label="favourite ? 'Favourite' : 'Add to favourites'"
+            :color="favourite ? 'primary' : 'neutral'"
+            :variant="favourite ? 'soft' : 'outline'"
+            size="xs"
+            class="ml-auto"
+            :aria-pressed="favourite"
+            @click="favourites.toggle(entry)"
+          >
+            <template #leading>
+              <UIcon name="i-lucide-star" mode="svg" class="size-4" :class="favourite ? 'fill-current' : ''" />
+            </template>
+          </UButton>
         </div>
 
         <!-- The club's own words. Kept apart from the notes below it, which

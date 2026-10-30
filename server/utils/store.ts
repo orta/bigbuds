@@ -183,6 +183,16 @@ export interface Member {
   sites: string[]
 
   /**
+   * Class types this member has starred, by activity IRI.
+   *
+   * Keyed by type rather than by event, like `notes` and `attended`: Body Pump
+   * is the favourite, not one Tuesday's instance of it. A display preference —
+   * a starred class is lifted out of the sixty-odd on a day so it can be found
+   * at a glance, and nobody else ever sees which classes somebody starred.
+   */
+  favourites: string[]
+
+  /**
    * Waiting-list places this member wants KAL Pal to book the moment a space
    * opens, by class IRI.
    *
@@ -347,6 +357,7 @@ function withDefaults(member: Member): Member {
     hideFinished: member.hideFinished ?? false,
     hideVirtual: member.hideVirtual ?? false,
     sites: member.sites ?? [],
+    favourites: member.favourites ?? [],
     autoAccept: member.autoAccept ?? [],
     bookings: member.bookings ?? [],
     entries: member.entries ?? [],
