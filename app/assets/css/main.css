@@ -5,8 +5,25 @@
   --font-sans: 'Public Sans', ui-sans-serif, system-ui, sans-serif;
 }
 
+/**
+ * Colour, one step darker in the light theme.
+ *
+ * Nuxt UI uses the 500 shade of each palette for everything in light mode,
+ * including text: a subtle alert is lime-500 words on a lime tint, which is
+ * under 2:1 against white and unreadable in a bright gym. The 600 shades are
+ * the ones Tailwind draws for text on white, so each semantic colour moves
+ * there — primary's solid buttons get darker too, which white text on lime
+ * needed anyway. Amber is light enough to go a step further.
+ *
+ * Dark mode is left on the lighter shades, where the same text sits on a
+ * dark ground and already reads; `.dark` below says so explicitly.
+ */
 :root {
-  --ui-primary: var(--color-lime-500);
+  --ui-primary: var(--color-lime-600);
+  --ui-success: var(--ui-color-success-600);
+  --ui-info: var(--ui-color-info-600);
+  --ui-warning: var(--ui-color-warning-700);
+  --ui-error: var(--ui-color-error-600);
 }
 
 /**
@@ -23,6 +40,12 @@
  * same background as a hex value, so the browser chrome matches.
  */
 .dark {
+  --ui-primary: var(--color-lime-500);
+  --ui-success: var(--ui-color-success-400);
+  --ui-info: var(--ui-color-info-400);
+  --ui-warning: var(--ui-color-warning-400);
+  --ui-error: var(--ui-color-error-400);
+
   --ui-bg: var(--ui-color-neutral-800);
   --ui-bg-muted: var(--ui-color-neutral-700);
   --ui-bg-elevated: var(--ui-color-neutral-700);
