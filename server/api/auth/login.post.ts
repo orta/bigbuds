@@ -20,7 +20,9 @@ export default defineEventHandler(async event => {
 
   try {
     const member = await signIn(email, password)
-    await setUserSession(event, { user: sessionUser(member) })
+    // Replace rather than merge, as in `me.patch.ts`: signing in over an old
+    // session would otherwise concatenate its lists onto the stored ones.
+    await replaceUserSession(event, { user: sessionUser(member) })
 
     // Snapshot their bookings now so they show up to everyone else straight
     // away rather than at the next scheduled sync. Failing here should not

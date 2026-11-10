@@ -13,7 +13,7 @@ import type { ClassRow } from '#shared/types'
 import { alsoGoing, bookingBuddies, clientFor, isAround, regularsOn } from '../utils/members'
 import { noteCounts } from '../utils/notes'
 import { getDirectory, getPlanning, sitesFor } from '../utils/planning'
-import { resolve } from '../utils/gladstone'
+import { isBookedBy, isQueuedBy, resolve } from '../utils/gladstone'
 import { requireMember } from '../utils/session'
 import { readMembers } from '../utils/store'
 import { z } from 'zod'
@@ -43,7 +43,14 @@ export default defineEventHandler(async event => {
   const now = naiveNow()
   const notes = noteCounts(everyone)
   const sites = new Set(sitesFor(member))
-  const shown = sites.size ? events.filter(classEvent => sites.has(classEvent.siteId ?? '')) : events
+  // The member's own places stay whichever centre they are at: choosing
+  // centres narrows what to browse, and must not hide a class they are booked
+  // onto elsewhere — through the KAL app, or by someone booking for them.
+  const mine = (classEvent: (typeof events)[number]) =>
+    isBookedBy(classEvent, member.contactId) || isQueuedBy(classEvent, member.contactId)
+  const shown = sites.size
+    ? events.filter(classEvent => sites.has(classEvent.siteId ?? '') || mine(classEvent))
+    : events
 
   const entries: ClassRow[] = shown.map(classEvent => {
     const entry = resolve(directory, classEvent, member.contactId)
@@ -106,9 +113,10 @@ export default defineEventHandler(async event => {
     club: [...new Set(entries.flatMap(entry => (entry.club ? [entry.club] : [])))].join(' · ') || null,
     /**
      * Whether each row should say which centre it is at. Not when there is
-     * only one: the heading already says, and the row has little room.
+     * only one: the heading already says, and the row has little room. A
+     * booking kept from another centre makes two, and that row must say so.
      */
-    showSite: sites.size !== 1,
+    showSite: sites.size !== 1 || shown.some(classEvent => !sites.has(classEvent.siteId ?? '')),
     /** Who this member may book in, alongside themselves. */
     bookFor: buddies.map(({ contactId, name }) => ({ contactId, name })),
     entries,

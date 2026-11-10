@@ -57,6 +57,10 @@ export default defineEventHandler(async event => {
 
   const updated = await updateSettings(member.contactId, settings)
 
-  await setUserSession(event, { user: sessionUser(updated) })
+  // Replace, never `setUserSession`: that deep-merges into the old cookie with
+  // `defu`, which concatenates arrays — so un-hiding a category, unstarring a
+  // class or dropping a centre was saved to the store but stayed in the cookie,
+  // and came back on the next page load.
+  await replaceUserSession(event, { user: sessionUser(updated) })
   return { user: sessionUser(updated) }
 })

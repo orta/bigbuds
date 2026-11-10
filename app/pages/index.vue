@@ -159,13 +159,21 @@ const bookFor = computed<BookingBuddy[]>(() => data.value?.bookFor ?? [])
  * Deliberately one computed rather than one per view: the hidden categories
  * have to apply to the chronological list as well as the grouped one, and two
  * filter implementations would eventually disagree.
+ *
+ * A class the member holds a place on survives the category and virtual
+ * filters: those say what to browse, and hiding Cardio should not hide the
+ * Cardio class somebody booked them onto. The search still applies, being a
+ * question asked just now, and so does hiding finished classes, which is about
+ * the time of day rather than the kind of class.
  */
 const visible = computed(() =>
-  entries.value.filter(entry =>
-    matchesQuery(entry.name, query.value)
-    && !hiddenCategories.value.has(entry.category)
-    && !(hideFinished.value && entry.finished)
-    && !(hideVirtual.value && entry.tags.includes('virtual'))))
+  entries.value.filter((entry) => {
+    if (!matchesQuery(entry.name, query.value)) return false
+    if (hideFinished.value && entry.finished) return false
+    if (entry.booked || entry.queued) return true
+    return !hiddenCategories.value.has(entry.category)
+      && !(hideVirtual.value && entry.tags.includes('virtual'))
+  }))
 
 /**
  * Classes grouped under the curated headings, empty categories dropped.
